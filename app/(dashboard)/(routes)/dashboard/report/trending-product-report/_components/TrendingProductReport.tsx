@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { PrinterIcon } from 'lucide-react'
 import { DateRangePicker } from '@/components/commons/DateRangePicker'
 import { DateRange } from 'react-day-picker'
-import { getTopProductsByRange } from '@/lib/actions/sale.actions'
+
 
 const currentYear = new Date().getFullYear();
 
@@ -32,8 +32,8 @@ export default function TrendingProducts() {
         const fetchData = async () => {
             try {
                 if (dateRange?.from && dateRange?.to) {
-                    const response = await getTopProductsByRange(dateRange.from, dateRange.to, numberOfProducts);
-                    setProductsData(response);
+                    // const response = await getTopProductsByRange(dateRange.from, dateRange.to, numberOfProducts);
+                    setProductsData([]);
                 }
             } catch (error) {
                 console.log(error);
