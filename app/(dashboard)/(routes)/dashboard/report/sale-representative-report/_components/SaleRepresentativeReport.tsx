@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateRange } from 'react-day-picker'
 import { DateRangePicker } from '@/components/commons/DateRangePicker'
-import { getSalesRepresentation } from '@/lib/actions/combined.actions'
+
 
 ChartJS.register(
     CategoryScale,
@@ -61,13 +61,13 @@ export default function SaleRepresentativeReport({ currency }: { currency: strin
             try {
                 setIsLoading(true);
                 if (dateRange?.from && dateRange?.to) {
-                    const response = await getSalesRepresentation(dateRange.from, dateRange.to);
-                    setRepresentationData({
-                        totalCanceled: response.totalCanceled,
-                        totalDelivered: response.totalDelivered,
-                        totalExpenses: response.totalExpenses,
-                        salesData: response.salesData
-                    });
+                    // const response = await getSalesRepresentation(dateRange.from, dateRange.to);
+                    // setRepresentationData({
+                    //     totalCanceled: response.totalCanceled,
+                    //     totalDelivered: response.totalDelivered,
+                    //     totalExpenses: response.totalExpenses,
+                    //     salesData: response.salesData
+                    // });
                 }
             } catch (error) {
                 console.log(error);

@@ -7,7 +7,7 @@ import { Printer, TrendingUp, ArrowUpRight, ArrowDownRight, Loader2 } from 'luci
 import { motion } from 'framer-motion'
 import { DateRange } from 'react-day-picker'
 import { DateRangePicker } from '@/components/commons/DateRangePicker'
-import { fetchProfitLossDataByRange } from '@/lib/actions/combined.actions'
+
 
 const currentYear = new Date().getFullYear();
 export default function ProfitLossReport({ currency }: { currency: string }) {
@@ -29,14 +29,14 @@ export default function ProfitLossReport({ currency }: { currency: string }) {
             try {
                 setIsLoading(true);
                 if (dateRange?.from && dateRange?.to) {
-                    const response = await fetchProfitLossDataByRange(dateRange.from, dateRange.to);
-                    setFinancialData({
-                        totalSales: response.totalSales,
-                        totalProfitLoss: response.sales.profitOrLoss,
-                        totalExpenses: response.totalExpenses,
-                        totalAdjustments: response.totalAdjustments,
-                        netProfit: response.netProfit,
-                    });
+                    // const response = await fetchProfitLossDataByRange(dateRange.from, dateRange.to);
+                    // setFinancialData({
+                    //     totalSales: response.totalSales,
+                    //     totalProfitLoss: response.sales.profitOrLoss,
+                    //     totalExpenses: response.totalExpenses,
+                    //     totalAdjustments: response.totalAdjustments,
+                    //     netProfit: response.netProfit,
+                    // });
                 }
             } catch (error) {
                 console.log(error);
