@@ -21,6 +21,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
+import { createWarehouse } from "@/lib/actions/warehouse.actions"
+import { useRouter } from "next/navigation"
 
 
 
@@ -56,9 +58,10 @@ const warehouseTypes = [
     { value: "distribution", label: "Distribution Center", description: "Shipping and receiving hub" },
 ]
 
-const WarehouseModal = () => {
+const WarehouseModal = ({ staffs }) => {
     const [open, setOpen] = useState(false)
-    const [isSubmitting, setIsSubmitting] = useState(false)
+
+    const router = useRouter()
 
 
     const form = useForm<FormData>({
@@ -72,29 +75,27 @@ const WarehouseModal = () => {
             type: undefined,
             isActive: true,
         },
-    })
+    });
+
+    const { isSubmitting } = form.formState
 
     async function onSubmit(values: FormData) {
-        setIsSubmitting(true)
-
         try {
-            // Simulate API call
-            await new Promise((resolve) => setTimeout(resolve, 2000))
-
-            console.log("Warehouse data:", values)
+            await createWarehouse(values)
+            router.refresh();
 
             toast.success("Success!", {
                 description: `Warehouse "${values.name}" has been created successfully.`,
             })
-            form.reset()
-            setOpen(false)
+
         } catch (error) {
             console.log(error)
             toast.error("Error", {
                 description: "Failed to create warehouse. Please try again.",
             })
         } finally {
-            setIsSubmitting(false)
+            form.reset()
+            setOpen(false)
         }
     }
 
@@ -236,9 +237,20 @@ const WarehouseModal = () => {
                                             <User className="h-4 w-4" />
                                             Manager ID *
                                         </FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="e.g., MGR001 or john.doe" {...field} disabled={isSubmitting} />
-                                        </FormControl>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select warehouse type" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {staffs.map((staff) => (
+                                                    <SelectItem key={staff._id} value={staff._id}>
+                                                        {staff.fullName}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                         <FormDescription>Employee ID or username of the warehouse manager</FormDescription>
                                         <FormMessage />
                                     </FormItem>

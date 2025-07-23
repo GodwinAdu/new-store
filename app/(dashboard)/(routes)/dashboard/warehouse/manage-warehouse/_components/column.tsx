@@ -1,20 +1,20 @@
 "use client"
 
 import { CellAction } from "@/components/table/cell-action";
-import { deleteTransport } from "@/lib/actions/transport.actions";
+import { deleteWarehouse } from "@/lib/actions/warehouse.actions";
 import { ColumnDef } from "@tanstack/react-table"
-import { Edit, Eye, Trash2 } from "lucide-react";
+import { Edit, Trash2 } from "lucide-react";
 
 // Create the delete function
 const handleDelete = async (id: string): Promise<void> => {
     try {
         // Replace this with your actual API call
-        await deleteTransport(id)
+        await deleteWarehouse(id)
 
         console.log("Item deleted successfully")
     } catch (error) {
         console.error("Delete error:", error)
-        throw error // Re-throw to let CellAction handle the error
+        throw error
     }
 }
 
@@ -29,8 +29,8 @@ export const columns: ColumnDef<any>[] = [
         header: "Type",
     },
     {
-        accessorKey: "vehicleNumber",
-        header: "Vehicle Number",
+        accessorKey: "location",
+        header: "Location",
     },
 
     {
@@ -50,7 +50,7 @@ export const columns: ColumnDef<any>[] = [
                     {
                         label: "Edit",
                         type: "edit",
-                        href: `/dashboard/transport/vehicle-management/${row.original._id}`,
+                        href: `/dashboard/warehouse/manage-warehouse/${row.original._id}`,
                         icon: <Edit className="h-4 w-4" />,
                         permissionKey: "editUser",
                     },

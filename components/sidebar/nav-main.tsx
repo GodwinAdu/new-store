@@ -97,6 +97,11 @@ export function NavMain({ role }: NavMainProps) {
       roleField: "product",
       items: [
         {
+          title: "Manage Warehouse",
+          url: `/dashboard/warehouse/manage-warehouse`,
+          // roleField: "listProduct"
+        },
+        {
           title: "Stock Overview",
           url: `/dashboard/warehouse/stock-overview`,
           // roleField: "listProduct"
@@ -120,11 +125,6 @@ export function NavMain({ role }: NavMainProps) {
           title: "Receive Stock",
           url: `/dashboard/warehouse/receive-stock`,
           // roleField: "manageCustomer"
-        },
-        {
-          title: "Manage Warehouse",
-          url: `/dashboard/warehouse/manage-warehouse`,
-          // roleField: "listProduct"
         },
       ],
     },
@@ -165,26 +165,26 @@ export function NavMain({ role }: NavMainProps) {
           url: `/dashboard/products/print-labels`,
           roleField: "managePrintLabel"
         },
-        {
-          title: "Variations",
-          url: `/dashboard/products/variations`,
-          roleField: "manageVariation"
-        },
+        // {
+        //   title: "Variations",
+        //   url: `/dashboard/products/variations`,
+        //   roleField: "manageVariation"
+        // },
         {
           title: "Import Products",
           url: `/dashboard/products/import-products`,
           roleField: "manageImportProduct"
         },
-        {
-          title: "Selling group price",
-          url: `/dashboard/products/selling-group-price`,
-          roleField: "manageSellingGroupPrice"
-        },
-        {
-          title: "Warrants",
-          url: `/dashboard/products/warrants`,
-          roleField: "manageWarrant"
-        }
+        // {
+        //   title: "Selling group price",
+        //   url: `/dashboard/products/selling-group-price`,
+        //   roleField: "manageSellingGroupPrice"
+        // },
+        // {
+        //   title: "Warrants",
+        //   url: `/dashboard/products/warrants`,
+        //   roleField: "manageWarrant"
+        // }
       ],
     },
     {
@@ -266,29 +266,6 @@ export function NavMain({ role }: NavMainProps) {
       ],
     },
     {
-      title: "Expenses",
-      url: "#",
-      icon: CreditCard,
-      isActive: true,
-      roleField: "expenses",
-      items: [
-        {
-          title: "Expenses Categories",
-          url: `/dashboard/expenses/expenses-categories`,
-          roleField: "manageExpensesCategory"
-        },
-        {
-          title: "Add Expenses",
-          url: `/dashboard/expenses/add-expenses`,
-          roleField: "manageExpenses"
-        }, {
-          title: "List Expenses",
-          url: `/dashboard/expenses/list-expenses`,
-          roleField: "listExpenses"
-        }
-      ],
-    },
-    {
       title: "Account Management",
       url: "#",
       icon: DollarSign,
@@ -298,6 +275,21 @@ export function NavMain({ role }: NavMainProps) {
           title: "List Accounts",
           url: `/dashboard/accounts/list-accounts`,
           roleField: "manageListAccount"
+        },
+        {
+          title: "Expenses",
+          url: `/dashboard/accounts/expenses`,
+          roleField: "manageHr"
+        },
+        {
+          title: "Incomes",
+          url: `/dashboard/accounts/incomes`,
+          roleField: "manageHr"
+        },
+        {
+          title: "Transfer",
+          url: `/dashboard/accounts/transfer`,
+          roleField: "manageHr"
         },
         {
           title: "Balance Sheet",
@@ -318,17 +310,17 @@ export function NavMain({ role }: NavMainProps) {
         },
         {
           title: "Salary Structure",
-          url: `/dashboard/hr-payroll/salary-structure`,
+          url: `/dashboard/accounts/salary-structure`,
           roleField: "manageHr"
         },
         {
           title: "Salary Assign",
-          url: `/dashboard/hr-payroll/salary-assign`,
+          url: `/dashboard/accounts/salary-assign`,
           roleField: "manageHr"
         },
         {
           title: "Salary Payment",
-          url: `/dashboard/hr-payroll/salary-payment`,
+          url: `/dashboard/accounts/salary-payment`,
           roleField: "manageHr"
         },
       ],

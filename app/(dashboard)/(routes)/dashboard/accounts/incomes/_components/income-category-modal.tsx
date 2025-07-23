@@ -3,7 +3,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -25,34 +24,23 @@ import { Input } from "@/components/ui/input";
 import { PlusCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-
-
 
 const formSchema = z.object({
     name: z.string().min(2, {
         message: "name must be at least 2 characters.",
     }),
-    balance: z.coerce.number().min(0, {
-        message: "balance must be at least 0.",
-    }),
-    description: z.string().optional(),
     active: z.boolean()
 });
 
-export function AccountModal() {
-   
-    const router = useRouter();
+export function IncomeCategoriesModal() {
 
+    const router = useRouter();
     // 1. Define your form.
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: "",
-            balance: 0,
-            description: "",
-          
             active: false,
         },
     });
@@ -62,14 +50,14 @@ export function AccountModal() {
     // 2. Define a submit handler.
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            // await createAccount(values)
-            form.reset();
+            // await createExpensesCategory(values)
             router.refresh();
-            toast.success( "Created successfully",{
-                description: "New brand was added successfully...",
+            form.reset();
+            toast("Created successfully", {
+                description: "New Category was added successfully...",
             });
-        } catch{
-            toast( "Something went wrong",{
+        } catch {
+            toast("Something went wrong", {
                 description: "Please try again later...",
             });
         }
@@ -78,30 +66,30 @@ export function AccountModal() {
     return (
         <Dialog>
             <DialogTrigger asChild>
-                <Button className="h-7 gap-1" size="sm">
+                <Button variant="outline" className="h-7 gap-1" size="sm">
                     <PlusCircle className="h-3.5 w-3.5" />
                     <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                        New Account
+                        New Category
                     </span>
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px] w-[96%]">
                 <DialogHeader>
-                    <DialogTitle>Create Account</DialogTitle>
-                    <DialogDescription>Creating a new Payment Account .</DialogDescription>
+                    <DialogTitle>Create Income Category</DialogTitle>
+                    <DialogDescription>Creating New Category.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                             <FormField
                                 control={form.control}
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Enter Account Name</FormLabel>
+                                        <FormLabel>Enter Category Name</FormLabel>
                                         <FormControl>
                                             <Input
-                                                placeholder="Eg. Minerals"
+                                                placeholder="Eg. Coca-Cola"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -109,39 +97,6 @@ export function AccountModal() {
                                     </FormItem>
                                 )}
                             />
-                            <FormField
-                                control={form.control}
-                                name="balance"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Account Balance</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                placeholder="Eg. Minerals"
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="description"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Description</FormLabel>
-                                        <FormControl>
-                                            <Textarea
-                                                placeholder="Eg. Minerals"
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                           
                             <FormField
                                 control={form.control}
                                 name="active"

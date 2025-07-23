@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { CellAction } from "./cell-action";
+
 
 export const columns: ColumnDef<IAccount>[] = [
     {
@@ -34,6 +34,6 @@ export const columns: ColumnDef<IAccount>[] = [
     },
     {
         id: "actions",
-        cell: ({ row }) => <CellAction data={row.original} />
+        // cell: ({ row }) => <CellAction data={row.original} />
     },
 ];

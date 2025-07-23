@@ -6,6 +6,7 @@ const WarehouseSchema = new Schema({
         required: true,
         unique: true,
     },
+    type: { type: String },
     location: { type: String },
     description: { type: String },
     capacity: {
@@ -24,12 +25,12 @@ const WarehouseSchema = new Schema({
     createdBy: {
         type: Schema.Types.ObjectId,
         ref: 'Staff',
-        default:null
+        default: null
     },
     modifiedBy: {
         type: Schema.Types.ObjectId,
         ref: 'Staff',
-        default:null
+        default: null
     },
     del_flag: {
         type: Boolean,

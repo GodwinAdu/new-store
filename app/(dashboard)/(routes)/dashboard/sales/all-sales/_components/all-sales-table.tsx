@@ -4,7 +4,7 @@ import { DataTable } from "@/components/table/data-table";
 import { Separator } from "@/components/ui/separator";
 import React, { useCallback, useEffect, useState } from "react";
 import { columns } from "./column";
-import { fetchSalesByDate } from "@/lib/actions/sale.actions";
+// import { fetchSalesByDate } from "@/lib/actions/sale.actions";
 import { DateRangePicker } from "@/components/commons/DateRangePicker";
 import { DateRange } from "react-day-picker";
 import { debounce } from "lodash";
@@ -53,8 +53,8 @@ const SalesTable = () => {
   const fetchSales = async (from: Date, to: Date) => {
     setIsLoading(true);
     try {
-      const sales = await fetchSalesByDate(from, to);
-      setSalesData(sales);
+      // const sales = await fetchSalesByDate(from, to);
+      setSalesData([]);
     } catch (error) {
       console.error("Error fetching sales:", error);
     } finally {

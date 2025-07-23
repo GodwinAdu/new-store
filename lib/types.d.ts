@@ -5,15 +5,25 @@ interface WorkSchedule extends Document {
 }
 
 interface IProductBatch extends Document {
+    _id?: string
     product: mongoose.Types.ObjectId;
-    warehouse: mongoose.Types.ObjectId;
-    purchasePrice: number;
+    warehouseId: mongoose.Types.ObjectId;
+    batchNumber: string;
+    unitCost: number;
+    sellingPrice:number;
     quantity: number;
     expiryDate?: Date;
     remaining: number;
     isDepleted: boolean;
     depletedAt: Date;
     createdAt: Date;
+    createdBy: Schema.Types.ObjectId
+    modifiedBy: Schema.Types.ObjectId
+    del_flag: boolean
+    mod_flag: boolean
+    createdAt: Date
+    updatedAt: Date
+    [key: string]: unknown;
 }
 
 interface IPurchaseItem {
@@ -40,7 +50,7 @@ interface IProductStock extends Document {
     updatedAt: Date;
 }
 
-interface IUnit {
+interface IUnit extends Document {
     _id: string;
     name: string;
     isActive: boolean
@@ -52,7 +62,7 @@ interface IUnit {
     updatedAt: Date
     [key: string]: unknown;
 }
-interface IBrand {
+interface IBrand extends Document {
     _id: string;
     name: string;
     isActive: boolean
@@ -64,7 +74,7 @@ interface IBrand {
     updatedAt: Date
     [key: string]: unknown;
 }
-interface ICategory {
+interface ICategory extends Document {
     _id: string;
     name: string;
     isActive: boolean
@@ -75,4 +85,33 @@ interface ICategory {
     createdAt: Date
     updatedAt: Date
     [key: string]: unknown;
+}
+
+interface ISupplier extends Document {
+    name: string
+    contactPerson: string
+    email: string
+    phone: string
+    address: string
+    city: string
+    country: string
+    status: "active" | "inactive" | "pending"
+    rating: number
+    totalOrders: number
+    totalSpent: number
+    paymentTerms: string
+    category: string
+    joinDate: Date
+    lastOrderDate: Date
+    website?: string
+    taxId?: string
+    bankAccount?: string
+    creditLimit: number
+    currentBalance: number
+    createdBy: Schema.Types.ObjectId
+    modifiedBy: Schema.Types.ObjectId
+    del_flag: boolean
+    mod_flag: boolean
+    createdAt: Date
+    updatedAt: Date
 }

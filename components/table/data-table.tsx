@@ -163,13 +163,13 @@ export function DataTable<TData, TValue>({
                     </DropdownMenu>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={exportToCSV}>
+                    <Button disabled={data.length === 0} variant="outline" onClick={exportToCSV}>
                         <File className="mr-2 h-4 w-4" /> CSV
                     </Button>
-                    <Button variant="outline" onClick={exportToExcel}>
+                    <Button disabled={data.length === 0} variant="outline" onClick={exportToExcel}>
                         <File className="mr-2 h-4 w-4" /> Excel
                     </Button>
-                    <Button variant="outline" onClick={exportToPDF}>
+                    <Button disabled={data.length === 0} variant="outline" onClick={exportToPDF}>
                         <Printer className="mr-2 h-4 w-4" /> PDF
                     </Button>
                 </div>

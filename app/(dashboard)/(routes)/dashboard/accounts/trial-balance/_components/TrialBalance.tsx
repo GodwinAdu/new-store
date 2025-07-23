@@ -22,7 +22,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { DateRangePicker } from '@/components/ui/date-range-picker'
+// import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { DataTable } from '@/components/table/data-table'
 
 interface TrialBalanceData {
@@ -179,7 +179,7 @@ export default function TrialBalance() {
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <DateRangePicker date={date} onDateChange={setDate} />
+                    {/* <DateRangePicker date={date} onDateChange={setDate} /> */}
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>

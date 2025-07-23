@@ -1,6 +1,6 @@
 "use client"
 
-import BrandSelection from "@/components/commons/BrandSelection"
+
 import CategorySelection from "@/components/commons/CategorySelection"
 import { DataTable } from "@/components/table/data-table"
 import { Button } from "@/components/ui/button"
@@ -42,7 +42,7 @@ const ListProductTable = ({ categories, brands }: Props) => {
         <>
             <div className="flex justify-between items-center mb-4">
                 <div className="flex gap-4">
-                    <BrandSelection SelectedBrand={(value) => setSelectedBrand(value)} brands={brands} />
+                    {/* <BrandSelection SelectedBrand={(value) => setSelectedBrand(value)} brands={brands} /> */}
                     <CategorySelection
                         SelectedCategory={(value) => setSelectedCategory(value)}
                         categories={categories}
