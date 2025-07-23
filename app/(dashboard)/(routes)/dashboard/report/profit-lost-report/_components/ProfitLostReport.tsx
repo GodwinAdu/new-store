@@ -10,7 +10,7 @@ import { DateRangePicker } from '@/components/commons/DateRangePicker'
 
 
 const currentYear = new Date().getFullYear();
-export default function ProfitLossReport({ currency }: { currency: string }) {
+export default function ProfitLossReport() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: new Date(currentYear, 0, 1),
         to: new Date(currentYear, 11, 31),
@@ -79,7 +79,7 @@ export default function ProfitLossReport({ currency }: { currency: string }) {
                                 <div className="flex justify-between items-start">
                                     <div className="space-y-1">
                                         <p className="text-sm font-medium text-muted-foreground">Total Sales</p>
-                                        <p className="text-2xl font-bold flex items-center"><span>{currency}</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalSales ?? 0).toFixed(2)}</p>
+                                        <p className="text-2xl font-bold flex items-center"><span>Gh</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalSales ?? 0).toFixed(2)}</p>
                                     </div>
                                     <div className="p-3 bg-primary/10 rounded-full">
                                         <TrendingUp className="w-5 h-5 text-primary" />
@@ -102,7 +102,7 @@ export default function ProfitLossReport({ currency }: { currency: string }) {
                             <CardContent className="p-6">
                                 <div className="space-y-1">
                                     <p className="text-sm font-medium text-muted-foreground">Gross Profit</p>
-                                    <p className="text-2xl font-bold flex items-center"><span>{currency}</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalProfitLoss ?? 0).toFixed(2)}</p>
+                                    <p className="text-2xl font-bold flex items-center"><span>Gh</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalProfitLoss ?? 0).toFixed(2)}</p>
                                     <p className="text-xs text-muted-foreground">Total sell price - Total purchase price</p>
                                 </div>
                                 <div className="mt-4 flex items-center text-green-600 text-sm">
@@ -122,7 +122,7 @@ export default function ProfitLossReport({ currency }: { currency: string }) {
                             <CardContent className="p-6">
                                 <div className="space-y-1">
                                     <p className="text-sm font-medium text-muted-foreground">Net Profit</p>
-                                    <p className="text-2xl font-bold flex items-center"><span>{currency}</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (netProfit ?? 0).toFixed(2)}</p>
+                                    <p className="text-2xl font-bold flex items-center"><span>Gh</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (netProfit ?? 0).toFixed(2)}</p>
                                     <p className="text-xs text-muted-foreground">After adjustments & expenses</p>
                                 </div>
                                 <div className="mt-4 flex items-center text-red-600 text-sm">
@@ -237,14 +237,14 @@ export default function ProfitLossReport({ currency }: { currency: string }) {
                                                 <p className="font-medium">Total Stock Adjustment</p>
                                                 <p className="text-sm text-muted-foreground">Current period</p>
                                             </div>
-                                            <p className="font-medium flex item-center"><span>{currency}</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalAdjustments ?? 0).toFixed(2)}</p>
+                                            <p className="font-medium flex item-center"><span>Gh</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalAdjustments ?? 0).toFixed(2)}</p>
                                         </div>
                                         <div className="flex justify-between items-center p-3 bg-primary/5 rounded-lg">
                                             <div>
                                                 <p className="font-medium">Total Expenses</p>
                                                 <p className="text-sm text-muted-foreground">Current period</p>
                                             </div>
-                                            <p className="font-medium flex items-center"><span>{currency}</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalExpenses ?? 0).toFixed(2)}</p>
+                                            <p className="font-medium flex items-center"><span>Gh</span> {isLoading ? <Loader2 className='w-4 h-4 animate-spin' /> : (totalExpenses ?? 0).toFixed(2)}</p>
                                         </div>
                                     </div>
                                 </div>

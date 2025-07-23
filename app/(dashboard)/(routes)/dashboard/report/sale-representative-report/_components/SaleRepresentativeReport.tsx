@@ -26,7 +26,7 @@ ChartJS.register(
 )
 
 const currentYear = new Date().getFullYear()
-export default function SaleRepresentativeReport({ currency }: { currency: string }) {
+export default function SaleRepresentativeReport() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: new Date(currentYear, 0, 1),
         to: new Date(currentYear, 11, 31),
@@ -107,7 +107,7 @@ export default function SaleRepresentativeReport({ currency }: { currency: strin
                         <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold"><span>{currency}</span> {(totalDelivered).toFixed(2)}</div>
+                        <div className="text-2xl font-bold"><span>Gh</span> {(totalDelivered).toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground">
                             +20.1% from last month
                         </p>
@@ -118,7 +118,7 @@ export default function SaleRepresentativeReport({ currency }: { currency: strin
                         <CardTitle className="text-sm font-medium">Total Returns</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold"><span>{currency}</span> {(totalCanceled).toFixed(2)}</div>
+                        <div className="text-2xl font-bold"><span>Gh</span> {(totalCanceled).toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground">
                             No returns this period
                         </p>
@@ -129,7 +129,7 @@ export default function SaleRepresentativeReport({ currency }: { currency: strin
                         <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold"><span>{currency}</span> {(totalExpenses).toFixed(2)}</div>
+                        <div className="text-2xl font-bold"><span>Gh</span> {(totalExpenses).toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground">
                             No expenses recorded
                         </p>
