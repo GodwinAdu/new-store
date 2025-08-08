@@ -4,14 +4,6 @@ import { useState } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -22,22 +14,13 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Separator } from "@/components/ui/separator"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import {
-    CalendarIcon,
-    User,
-    Phone,
-    Mail,
-    MapPin,
-    X,
-    Upload,
-    AlertCircle,
-    Clock,
-    CreditCard,
-    Briefcase,
-} from "lucide-react"
+import { CalendarIcon, Phone, Mail, MapPin, X, Upload, AlertCircle, Clock, CreditCard, Briefcase } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
+import { toast } from "sonner"
+import { usePathname, useRouter } from "next/navigation"
+import { createStaff } from "@/lib/actions/employee.actions"
 
 // Work Schedule Schema
 const workScheduleSchema = z.object({
@@ -70,7 +53,6 @@ const accountDetailsSchema = z.object({
 
 // Main Staff Schema
 const staffSchema = z.object({
-
     // Basic Information
     username: z.string().min(3, "Username must be at least 3 characters").toLowerCase(),
     fullName: z.string().min(2, "Full name is required"),
@@ -81,39 +63,30 @@ const staffSchema = z.object({
     password: z.string().min(8, "Password must be at least 8 characters"),
     role: z.string().min(2, "Role is required"),
     avatarUrl: z.string().optional(),
-
     // Status Fields
     isActive: z.boolean(),
     availableAllSchedule: z.boolean(),
     requirePasswordChange: z.boolean(),
-
     // Address
     address: addressSchema.optional(),
-
     // Job Information
     jobTitle: z.string().optional(),
     departmentId: z.string().min(1, "Department is required"),
-    workLocation: z.enum(["on-site", "remote", "hybrid"]).default("on-site"),
+    workLocation: z.enum(["on-site", "remote", "hybrid"]).default("on-site").optional(),
     startDate: z.date().optional(),
-
     // Work Schedule
-    workSchedule: z.array(workScheduleSchema),
-
+    workSchedule: z.array(workScheduleSchema).min(1, "At least one work schedule entry is required"), // Added min(1) validation
     // Warehouse (array of IDs)
     warehouse: z.array(z.string()),
-
     // Personal Details
-    gender: z.enum(["male", "female", "other", "prefer-not-to-say"]).default("prefer-not-to-say"),
+    gender: z.enum(["male", "female", "other", "prefer-not-to-say"]),
     bio: z.string().optional(),
-
     // Card and Account Details
     cardDetails: cardDetailsSchema.optional(),
     accountDetails: accountDetailsSchema.optional(),
 })
 
 type StaffFormValues = z.infer<typeof staffSchema>
-
-
 
 const workLocations = [
     { value: "on-site", label: "On-site", description: "Work from office/facility" },
@@ -129,15 +102,21 @@ const genderOptions = [
 ]
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
 const idCardTypes = ["Driver's License", "Passport", "National ID", "Employee ID", "State ID", "Military ID"]
+const accountTypes = ["Checking", "Savings", "Business Checking", "Business Savings","Mobile Money"]
 
-const accountTypes = ["Checking", "Savings", "Business Checking", "Business Savings"]
+interface CreateStaffFormProps {
+    roles: { _id: string; displayName: string }[]
+    departments: { _id: string; name: string }[] // Replace 'any' with the actual type of departments if known
+}
 
-export function CreateStaffForm({ roles, departments }) {
+export function CreateStaffForm({ roles, departments }: CreateStaffFormProps) {
     const [currentStep, setCurrentStep] = useState(1)
     const [selectedWarehouses, setSelectedWarehouses] = useState<string[]>([])
     const [workSchedule, setWorkSchedule] = useState<Array<{ day: string; startTime: string; endTime: string }>>([])
+
+    const router = useRouter()
+    const path = usePathname()
 
     const form = useForm<StaffFormValues>({
         resolver: zodResolver(staffSchema),
@@ -181,24 +160,97 @@ export function CreateStaffForm({ roles, departments }) {
 
     const totalSteps = 5
 
-    const onSubmit = (data: StaffFormValues) => {
-        const finalData = {
-            ...data,
-            warehouse: selectedWarehouses,
-            workSchedule: workSchedule,
+    const onSubmit = async (data: StaffFormValues) => {
+        try {
+            console.log("onSubmit triggered!") // Debugging log
+            const finalData = {
+                ...data,
+                warehouse: selectedWarehouses,
+                workSchedule: workSchedule,
+            };
+            await createStaff(finalData, path)
+            router.push("/dashboard/hr/staffs")
+            toast.success("Staff created successfully!", {
+                description: "The staff member has been created.",
+            })
+        } catch (error) {
+            console.error("Error during form submission:", error)
+            toast.error("Failed to create staff", {
+                description: "Please check the form for errors and try again.",
+            })
+
+        } finally {
+            form.reset()
+            setCurrentStep(1)
+            setSelectedWarehouses([])
+            setWorkSchedule([])
         }
-        console.log("Staff Data Submitted:", finalData)
-        form.reset()
-        setCurrentStep(1)
-        setSelectedWarehouses([])
-        setWorkSchedule([])
     }
 
-    const nextStep = () => {
-        if (currentStep < totalSteps) {
-            setCurrentStep(currentStep + 1)
+    const nextStep = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        try {
+            let isValid = false;
+            let fieldsToValidate: (keyof StaffFormValues)[] = [];
+
+            switch (currentStep) {
+                case 1:
+                    fieldsToValidate = [
+                        "fullName",
+                        "username",
+                        "email",
+                        "password",
+                        "phoneNumber",
+                        "emergencyNumber",
+                        "dob",
+                        "gender",
+                    ];
+                    break;
+                case 2:
+                    fieldsToValidate = ["address", "bio"];
+                    break;
+                case 3:
+                    fieldsToValidate = [
+                        "role",
+                        "jobTitle",
+                        "departmentId",
+                        "workLocation",
+                        "startDate",
+                        "isActive",
+                        "availableAllSchedule",
+                        "requirePasswordChange",
+                    ];
+                    break;
+                case 4:
+                    fieldsToValidate = ["workSchedule"];
+                    break;
+                case 5:
+                    // Final step - no next step!
+                    console.log("Final step reached. Preventing auto-next.");
+                    return;
+            }
+
+            if (fieldsToValidate.length > 0) {
+                isValid = await form.trigger(fieldsToValidate as any);
+
+                if (!isValid) {
+                    console.log("Validation errors on step", currentStep, form.formState.errors);
+                    return;
+                }
+            } else {
+                isValid = true;
+            }
+
+            if (isValid && currentStep < totalSteps) {
+                setCurrentStep(currentStep + 1);
+            }
+
+        } catch (error) {
+            console.error("Error during nextStep validation:", error);
         }
-    }
+    };
+
+
 
     const prevStep = () => {
         if (currentStep > 1) {
@@ -211,7 +263,6 @@ export function CreateStaffForm({ roles, departments }) {
         if (fullName && fullName.trim()) {
             const names = fullName.toLowerCase().trim().split(/\s+/) // Split by any whitespace
             let username = ""
-
             if (names.length === 1) {
                 // Single name: use the name + random number
                 username = `${names[0]}${Math.floor(Math.random() * 100)}`
@@ -222,25 +273,32 @@ export function CreateStaffForm({ roles, departments }) {
                 // Multiple names: first.last (using first and last name)
                 username = `${names[0]}.${names[names.length - 1]}`
             }
-
             // Ensure username is lowercase and set it
             form.setValue("username", username.toLowerCase())
         }
     }
 
     const addWorkSchedule = () => {
-        setWorkSchedule([...workSchedule, { day: "Monday", startTime: "09:00", endTime: "17:00" }])
+        const newSchedule = { day: "Monday", startTime: "09:00", endTime: "17:00" }
+        const updatedSchedules = [...workSchedule, newSchedule]
+        setWorkSchedule(updatedSchedules)
+        // Also update the form's internal state for validation
+        form.setValue("workSchedule", updatedSchedules)
     }
 
     const removeWorkSchedule = (index: number) => {
-        setWorkSchedule(workSchedule.filter((_, i) => i !== index))
+        const updatedSchedules = workSchedule.filter((_, i) => i !== index)
+        setWorkSchedule(updatedSchedules)
+        // Also update the form's internal state for validation
+        form.setValue("workSchedule", updatedSchedules)
     }
 
     const updateWorkSchedule = (index: number, field: string, value: string) => {
         const updated = [...workSchedule]
         updated[index] = { ...updated[index], [field]: value }
         setWorkSchedule(updated)
-        form.setValue("workSchedule", updated)
+        // Always update the form's internal state for validation
+        form.setValue("workSchedule", updated as StaffFormValues["workSchedule"])
     }
 
     const getStepTitle = (step: number) => {
@@ -262,7 +320,6 @@ export function CreateStaffForm({ roles, departments }) {
 
     return (
         <>
-
             {/* Progress Indicator */}
             <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
@@ -278,9 +335,9 @@ export function CreateStaffForm({ roles, departments }) {
                     />
                 </div>
             </div>
-
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {/* Removed onSubmit={form.handleSubmit(onSubmit)} from here */}
+                <form className="space-y-6">
                     {/* Step 1: Basic Information */}
                     {currentStep === 1 && (
                         <div className="space-y-6">
@@ -300,7 +357,6 @@ export function CreateStaffForm({ roles, departments }) {
                                     Upload Photo
                                 </Button>
                             </div>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormField
                                     control={form.control}
@@ -321,7 +377,6 @@ export function CreateStaffForm({ roles, departments }) {
                                                                 if (fullName && fullName.trim()) {
                                                                     const names = fullName.toLowerCase().trim().split(/\s+/)
                                                                     let username = ""
-
                                                                     if (names.length === 1) {
                                                                         username = `${names[0]}${Math.floor(Math.random() * 100)}`
                                                                     } else if (names.length === 2) {
@@ -329,7 +384,6 @@ export function CreateStaffForm({ roles, departments }) {
                                                                     } else {
                                                                         username = `${names[0]}.${names[names.length - 1]}`
                                                                     }
-
                                                                     form.setValue("username", username.toLowerCase())
                                                                 }
                                                             }, 100)
@@ -341,7 +395,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="username"
@@ -361,7 +414,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="email"
@@ -378,7 +430,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="password"
@@ -393,7 +444,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="phoneNumber"
@@ -410,7 +460,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="emergencyNumber"
@@ -425,7 +474,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="dob"
@@ -452,8 +500,8 @@ export function CreateStaffForm({ roles, departments }) {
                                                         disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                                                         defaultMonth={field.value || new Date(1990, 0)} // Default to 1990 if no value
                                                         captionLayout="dropdown"
-                                                        startMonth={new Date(1970, 0)}
-                                                        endMonth={new Date(new Date().getFullYear(), 0)}
+                                                        fromYear={1900} // Set minimum year
+                                                        toYear={new Date().getFullYear()} // Set maximum year to current year
                                                         autoFocus
                                                     />
                                                 </PopoverContent>
@@ -463,7 +511,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="gender"
@@ -499,7 +546,6 @@ export function CreateStaffForm({ roles, departments }) {
                                 <MapPin className="h-5 w-5" />
                                 Address Information
                             </h3>
-
                             <FormField
                                 control={form.control}
                                 name="address.street"
@@ -513,7 +559,6 @@ export function CreateStaffForm({ roles, departments }) {
                                     </FormItem>
                                 )}
                             />
-
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <FormField
                                     control={form.control}
@@ -528,7 +573,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="address.state"
@@ -542,7 +586,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="address.zipCode"
@@ -556,7 +599,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="address.country"
@@ -571,7 +613,6 @@ export function CreateStaffForm({ roles, departments }) {
                                     )}
                                 />
                             </div>
-
                             <FormField
                                 control={form.control}
                                 name="bio"
@@ -600,7 +641,6 @@ export function CreateStaffForm({ roles, departments }) {
                                 <Briefcase className="h-5 w-5" />
                                 Job Information
                             </h3>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <FormField
                                     control={form.control}
@@ -626,7 +666,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="jobTitle"
@@ -640,7 +679,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="departmentId"
@@ -665,7 +703,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="workLocation"
@@ -693,7 +730,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         </FormItem>
                                     )}
                                 />
-
                                 <FormField
                                     control={form.control}
                                     name="startDate"
@@ -721,9 +757,7 @@ export function CreateStaffForm({ roles, departments }) {
                                     )}
                                 />
                             </div>
-
                             <Separator />
-
                             <div className="space-y-4">
                                 <h4 className="font-medium">Status Settings</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -742,7 +776,6 @@ export function CreateStaffForm({ roles, departments }) {
                                             </FormItem>
                                         )}
                                     />
-
                                     <FormField
                                         control={form.control}
                                         name="availableAllSchedule"
@@ -758,7 +791,6 @@ export function CreateStaffForm({ roles, departments }) {
                                             </FormItem>
                                         )}
                                     />
-
                                     <FormField
                                         control={form.control}
                                         name="requirePasswordChange"
@@ -786,7 +818,6 @@ export function CreateStaffForm({ roles, departments }) {
                                 <Clock className="h-5 w-5" />
                                 Work Schedule
                             </h3>
-
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <Label className="font-medium">Weekly Schedule</Label>
@@ -794,7 +825,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         Add Schedule
                                     </Button>
                                 </div>
-
                                 {workSchedule.map((schedule, index) => (
                                     <div key={index} className="flex items-center gap-4 p-4 border rounded-lg">
                                         <Select value={schedule.day} onValueChange={(value) => updateWorkSchedule(index, "day", value)}>
@@ -809,33 +839,32 @@ export function CreateStaffForm({ roles, departments }) {
                                                 ))}
                                             </SelectContent>
                                         </Select>
-
                                         <Input
                                             type="time"
                                             value={schedule.startTime}
                                             onChange={(e) => updateWorkSchedule(index, "startTime", e.target.value)}
                                             className="w-32"
                                         />
-
                                         <span className="text-sm text-gray-500">to</span>
-
                                         <Input
                                             type="time"
                                             value={schedule.endTime}
                                             onChange={(e) => updateWorkSchedule(index, "endTime", e.target.value)}
                                             className="w-32"
                                         />
-
                                         <Button type="button" onClick={() => removeWorkSchedule(index)} variant="outline" size="sm">
                                             <X className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 ))}
-
                                 {workSchedule.length === 0 && (
                                     <div className="text-center py-8 text-gray-500">
                                         No work schedule added yet. Click "Add Schedule" to create one.
                                     </div>
+                                )}
+                                {/* Display validation error for workSchedule if any */}
+                                {form.formState.errors.workSchedule && (
+                                    <p className="text-sm font-medium text-red-500">{form.formState.errors.workSchedule.message}</p>
                                 )}
                             </div>
                         </div>
@@ -848,7 +877,6 @@ export function CreateStaffForm({ roles, departments }) {
                                 <CreditCard className="h-5 w-5" />
                                 Card & Account Details
                             </h3>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-4">
                                     <h4 className="font-medium">ID Card Information</h4>
@@ -876,7 +904,6 @@ export function CreateStaffForm({ roles, departments }) {
                                             </FormItem>
                                         )}
                                     />
-
                                     <FormField
                                         control={form.control}
                                         name="cardDetails.idCardNumber"
@@ -891,7 +918,6 @@ export function CreateStaffForm({ roles, departments }) {
                                         )}
                                     />
                                 </div>
-
                                 <div className="space-y-4">
                                     <h4 className="font-medium">Bank Account Details</h4>
                                     <FormField
@@ -907,7 +933,6 @@ export function CreateStaffForm({ roles, departments }) {
                                             </FormItem>
                                         )}
                                     />
-
                                     <FormField
                                         control={form.control}
                                         name="accountDetails.accountNumber"
@@ -921,7 +946,6 @@ export function CreateStaffForm({ roles, departments }) {
                                             </FormItem>
                                         )}
                                     />
-
                                     <FormField
                                         control={form.control}
                                         name="accountDetails.accountType"
@@ -948,9 +972,7 @@ export function CreateStaffForm({ roles, departments }) {
                                     />
                                 </div>
                             </div>
-
                             <Separator />
-
                             {/* Summary */}
                             <div className="bg-blue-50 p-4 rounded-lg">
                                 <h4 className="font-medium mb-2 flex items-center gap-2">
@@ -995,7 +1017,8 @@ export function CreateStaffForm({ roles, departments }) {
                                     Next
                                 </Button>
                             ) : (
-                                <Button type="submit" disabled={form.formState.isSubmitting}>
+                                // This button now explicitly handles the form submission
+                                <Button type="submit" onClick={form.handleSubmit(onSubmit)} disabled={form.formState.isSubmitting}>
                                     {form.formState.isSubmitting ? "Creating Staff..." : "Create Staff"}
                                 </Button>
                             )}

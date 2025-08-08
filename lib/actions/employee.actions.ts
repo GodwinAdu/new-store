@@ -9,6 +9,7 @@ import { User, withAuth } from "../helpers/auth";
 import Department from "../models/deparment.models";
 import History from "../models/history.models";
 import { deleteDocument } from "./trash.actions";
+import { revalidatePath } from "next/cache";
 
 
 
@@ -20,7 +21,7 @@ interface LoginProps {
 }
 
 
-async function _createStaff(user: User, values: any) {
+async function _createStaff(user: User, values: any,path:string) {
     try {
         if (!user) throw new Error("User not authenticated")
 
@@ -62,7 +63,9 @@ async function _createStaff(user: User, values: any) {
             newUser.save(),
             department.save(),
             history.save()
-        ])
+        ]);
+
+        revalidatePath(path)
 
     } catch (error) {
         console.log("something went wrong", error);

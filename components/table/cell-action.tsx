@@ -1,11 +1,10 @@
 "use client"
 
-import React, { useState } from "react"
+import { ReactNode, useState } from "react"
 import { Edit, Eye, Loader2, MoreHorizontal } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-
 import { Button } from "@/components/ui/button"
 import {
     DropdownMenu,
@@ -14,13 +13,12 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
 import { DeleteDialog } from "@/components/commons/DeleteDialog"
 import useClientRole from "@/lib/helpers/client-role"
 
 interface ActionOption<T> {
     label: string
-    icon?: React.ReactNode
+    icon?: ReactNode
     type: "view" | "edit" | "delete" | "custom"
     permissionKey?: string
     onClick?: (item: T) => void
