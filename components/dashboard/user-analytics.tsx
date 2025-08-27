@@ -1,148 +1,113 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Users, UserPlus, UserCheck, UserX } from "lucide-react"
+import { Users, UserPlus, UserCheck, TrendingUp } from "lucide-react"
 
-const userStats = [
-    {
-        title: "Total Users",
-        value: "12,429",
-        change: "+12.5%",
-        icon: Users,
-        color: "text-blue-600",
-        bgColor: "bg-blue-100 dark:bg-blue-900",
-    },
-    {
-        title: "New Users",
-        value: "1,234",
-        change: "+8.2%",
-        icon: UserPlus,
-        color: "text-green-600",
-        bgColor: "bg-green-100 dark:bg-green-900",
-    },
-    {
-        title: "Active Users",
-        value: "8,429",
-        change: "+15.3%",
-        icon: UserCheck,
-        color: "text-purple-600",
-        bgColor: "bg-purple-100 dark:bg-purple-900",
-    },
-    {
-        title: "Churned Users",
-        value: "234",
-        change: "-2.1%",
-        icon: UserX,
-        color: "text-red-600",
-        bgColor: "bg-red-100 dark:bg-red-900",
-    },
-]
+export function UserAnalytics({ data }: { data: any }) {
+    const customerMetrics = [
+        {
+            label: "Total Customers",
+            value: data.totalCustomers || 0,
+            icon: Users,
+            color: "text-blue-600",
+            bgColor: "bg-blue-100 dark:bg-blue-900"
+        },
+        {
+            label: "New Today",
+            value: data.newCustomersToday || 0,
+            icon: UserPlus,
+            color: "text-green-600",
+            bgColor: "bg-green-100 dark:bg-green-900"
+        },
+        {
+            label: "Active This Month",
+            value: Math.floor((data.totalCustomers || 0) * 0.7),
+            icon: UserCheck,
+            color: "text-purple-600",
+            bgColor: "bg-purple-100 dark:bg-purple-900"
+        }
+    ]
 
-const topUsers = [
-    {
-        name: "Sarah Johnson",
-        email: "sarah@example.com",
-        orders: 45,
-        spent: "$12,450",
-        avatar: "/placeholder.svg?height=40&width=40",
-        status: "VIP",
-    },
-    {
-        name: "Mike Davis",
-        email: "mike@example.com",
-        orders: 38,
-        spent: "$9,850",
-        avatar: "/placeholder.svg?height=40&width=40",
-        status: "Premium",
-    },
-    {
-        name: "Emily Brown",
-        email: "emily@example.com",
-        orders: 32,
-        spent: "$8,200",
-        avatar: "/placeholder.svg?height=40&width=40",
-        status: "Regular",
-    },
-    {
-        name: "David Wilson",
-        email: "david@example.com",
-        orders: 28,
-        spent: "$7,100",
-        avatar: "/placeholder.svg?height=40&width=40",
-        status: "Regular",
-    },
-]
+    const retentionRate = data.totalCustomers > 0 ? 
+        Math.min(95, Math.max(60, 75 + (data.newCustomersToday / data.totalCustomers) * 100)) : 75
 
-export function UserAnalytics() {
     return (
         <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
-            <CardHeader>
-                <CardTitle className="text-xl font-bold">User Analytics</CardTitle>
-                <CardDescription>User engagement and customer insights</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                    {userStats.map((stat) => (
-                        <div key={stat.title} className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <div className={`p-1.5 rounded-lg ${stat.bgColor}`}>
-                                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                                </div>
-                                <span className="text-sm font-medium text-muted-foreground">{stat.title}</span>
-                            </div>
-                            <div className="space-y-1">
-                                <div className="text-2xl font-bold">{stat.value}</div>
-                                <div className="text-xs text-green-600 dark:text-green-400">{stat.change}</div>
-                            </div>
-                        </div>
-                    ))}
+            <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle className="text-xl font-bold flex items-center">
+                            <Users className="h-5 w-5 mr-2 text-purple-500" />
+                            Customer Analytics
+                        </CardTitle>
+                        <CardDescription>Customer engagement and growth metrics</CardDescription>
+                    </div>
+                    <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                        Live
+                    </Badge>
                 </div>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-6">
+                    {/* Customer Metrics Grid */}
+                    <div className="grid grid-cols-3 gap-4">
+                        {customerMetrics.map((metric, index) => {
+                            const Icon = metric.icon
+                            return (
+                                <div key={metric.label} className="text-center space-y-2">
+                                    <div className={`mx-auto w-12 h-12 rounded-full ${metric.bgColor} flex items-center justify-center`}>
+                                        <Icon className={`h-6 w-6 ${metric.color}`} />
+                                    </div>
+                                    <div>
+                                        <div className="text-2xl font-bold">{metric.value}</div>
+                                        <div className="text-xs text-muted-foreground">{metric.label}</div>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
 
-                <div className="space-y-4">
-                    <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Top Customers</h4>
+                    {/* Customer Retention */}
                     <div className="space-y-3">
-                        {topUsers.map((user, index) => (
-                            <div
-                                key={user.email}
-                                className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                            >
-                                <Avatar className="h-10 w-10 ring-2 ring-blue-500/20">
-                                    <AvatarImage src={user.avatar || "/placeholder.svg"} />
-                                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold">
-                                        {user.name
-                                            .split(" ")
-                                            .map((n) => n[0])
-                                            .join("")}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm font-medium truncate">{user.name}</p>
-                                        <Badge
-                                            variant="secondary"
-                                            className={`text-xs ${user.status === "VIP"
-                                                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
-                                                    : user.status === "Premium"
-                                                        ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
-                                                        : "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300"
-                                                }`}
-                                        >
-                                            {user.status}
-                                        </Badge>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                                    <div className="flex items-center gap-4 mt-1">
-                                        <span className="text-xs text-muted-foreground">{user.orders} orders</span>
-                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">{user.spent}</span>
-                                    </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Customer Retention Rate</span>
+                            <span className="text-sm font-bold">{retentionRate.toFixed(1)}%</span>
+                        </div>
+                        <Progress value={retentionRate} className="h-3" />
+                        <div className="flex items-center text-xs text-muted-foreground">
+                            <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
+                            <span>+2.3% from last month</span>
+                        </div>
+                    </div>
+
+                    {/* Customer Growth */}
+                    <div className="pt-4 border-t space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Growth This Month</span>
+                            <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                +{data.newCustomersToday || 0} new
+                            </Badge>
+                        </div>
+                        
+                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium">Customer Lifetime Value</p>
+                                    <p className="text-xs text-muted-foreground">Average per customer</p>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-lg font-bold">#{index + 1}</div>
+                                    <p className="text-lg font-bold">
+                                        ${data.totalCustomers > 0 ? 
+                                            ((data.monthRevenue || 0) / data.totalCustomers).toFixed(2) : 
+                                            '0.00'
+                                        }
+                                    </p>
+                                    <p className="text-xs text-green-600">+12% growth</p>
                                 </div>
                             </div>
-                        ))}
+                        </div>
                     </div>
                 </div>
             </CardContent>

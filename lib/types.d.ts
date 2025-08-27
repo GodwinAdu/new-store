@@ -4,6 +4,51 @@ interface WorkSchedule extends Document {
     endTime: string;
 }
 
+interface IStaff extends Document {
+    _id: string;
+    username: string;
+    fullName: string;
+    email: string;
+    phoneNumber?: string;
+    emergencyNumber?: string;
+    dob?: Date;
+    password: string;
+    role: string;
+    avatarUrl?: string;
+    isActive: boolean;
+    availableAllSchedule: boolean;
+    address?: Address;
+    isVerified: boolean;
+    jobTitle?: string;
+    departmentId: Schema.Types.ObjectId;
+    workSchedule: WorkSchedule[];
+    workLocation: "on-site" | "remote" | "hybrid";
+    warehouse: Schema.Types.ObjectId[];
+    cardDetails?: {
+        idCardType?: string;
+        idCardNumber?: string;
+    };
+    accountDetails?: {
+        accountName?: string;
+        accountNumber?: string;
+        accountType?: string;
+    };
+    startDate?: Date;
+    gender: "male" | "female" | "other" | "prefer-not-to-say";
+    bio?: string;
+    requirePasswordChange: boolean;
+    isBanned: boolean;
+    onLeave: boolean;
+    createdBy?: Schema.Types.ObjectId;
+    modifiedBy?: Schema.Types.ObjectId;
+    del_flag: boolean;
+    mod_flag: boolean;
+    action_type: "created" | "updated" | "deleted" | "restored";
+    createdAt: Date;
+    updatedAt: Date;
+    [key: string]: unknown;
+}
+
 interface IProductBatch extends Document {
     _id?: string
     product: mongoose.Types.ObjectId;

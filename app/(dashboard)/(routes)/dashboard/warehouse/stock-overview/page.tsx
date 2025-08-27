@@ -15,9 +15,9 @@ import { fetchAllStocks } from "@/lib/actions/product-batch.actions"
 export default async function StockOverview() {
 
   const stockData = await fetchAllStocks()
-  const totalValue = stockData.reduce((sum, item) => sum + item.sellingPrice, 0)
-  const lowStockItems = stockData.filter((item) => item.remaining <= 10).length
-  const outOfStockItems = stockData.filter((item) => item.currentStock === 0).length
+  const totalValue = stockData.reduce((sum, item) => sum + (item.sellingPrice * item.remaining), 0)
+  const lowStockItems = stockData.filter((item) => item.remaining <= 10 && item.remaining > 0).length
+  const outOfStockItems = stockData.filter((item) => item.remaining === 0).length
 
   return (
 
@@ -108,9 +108,7 @@ export default async function StockOverview() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Warehouses</SelectItem>
-                  <SelectItem value="warehouse-a">Warehouse A</SelectItem>
-                  <SelectItem value="warehouse-b">Warehouse B</SelectItem>
-                  <SelectItem value="cold-storage">Cold Storage</SelectItem>
+                  {/* Real warehouses would be loaded here */}
                 </SelectContent>
               </Select>
               <Button variant="outline" size="icon">
@@ -139,12 +137,12 @@ export default async function StockOverview() {
                 <TableRow key={item._id}>
                   <TableCell>
                     <div>
-                      <div className="font-medium">{item.product.name}</div>
-                      <div className="text-sm text-muted-foreground">{item.product.category}</div>
+                      <div className="font-medium">{item.product?.name || 'N/A'}</div>
+                      <div className="text-sm text-muted-foreground">{item.product?.categoryId?.name || 'N/A'}</div>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{item.product.sku}</TableCell>
-                  <TableCell>{item.warehouseId.name}</TableCell>
+                  <TableCell className="font-mono text-sm">{item.product?.sku || 'N/A'}</TableCell>
+                  <TableCell>{item.warehouseId?.name || 'N/A'}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{item.remaining}</span>
@@ -162,17 +160,19 @@ export default async function StockOverview() {
                   <TableCell>
                     <Badge
                       variant={
-                        item.status === "In Stock"
+                        item.status === "In stock"
                           ? "default"
-                          : item.status === "Low Stock"
+                          : item.remaining <= 10 && item.remaining > 0
                             ? "secondary"
-                            : "destructive"
+                            : item.remaining === 0
+                              ? "destructive"
+                              : "default"
                       }
                     >
-                      {item.status}
+                      {item.remaining === 0 ? "Out of Stock" : item.remaining <= 10 ? "Low Stock" : "In Stock"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{item.lastUpdated}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{new Date(item.updatedAt).toLocaleDateString()}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

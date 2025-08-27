@@ -17,11 +17,12 @@ import { NavUser } from "./nav-user"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   userRole: IRole,
-  user:IEmployee
+  user:IEmployee,
+  hasWarehouseAccess: boolean
 }
 
 export function AppSidebar(props: AppSidebarProps) {
-  const { user,  userRole, ...rest } = props;
+  const { user, userRole, hasWarehouseAccess, ...rest } = props;
 
   return (
     <Sidebar collapsible="icon" {...rest}>
@@ -29,7 +30,7 @@ export function AppSidebar(props: AppSidebarProps) {
         <TeamSwitcher user={user}  />
       </SidebarHeader>
       <SidebarContent className="scrollbar-hide">
-        <SideContent  role={userRole?.permissions} />
+        <SideContent role={userRole?.permissions} hasWarehouseAccess={hasWarehouseAccess} userRole={user?.role} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

@@ -1,11 +1,11 @@
 import { NavMain } from "./nav-main"
 
 
-const SideContent = ({ role}: { role:any, }) => {
+const SideContent = ({ role, hasWarehouseAccess, userRole }: { role: any, hasWarehouseAccess: boolean, userRole?: string }) => {
 
     return (
         <>
-            <NavMain role={role} />
+            <NavMain role={role} hasWarehouseAccess={hasWarehouseAccess} userRole={userRole} />
         </>
     )
 }

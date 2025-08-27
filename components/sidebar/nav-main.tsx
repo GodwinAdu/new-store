@@ -33,8 +33,9 @@ import {
 } from "@/components/ui/sidebar"
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { WarehouseNavSection } from "./warehouse-nav-section";
 
 interface NavItem {
   title: string;
@@ -48,21 +49,16 @@ interface NavItem {
 
 interface NavMainProps {
   role: IRole | undefined;
+  hasWarehouseAccess: boolean;
+  userRole?: string;
 }
 
-export function NavMain({ role }: NavMainProps) {
+export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
   const pathname = usePathname();
 
   const [openGroup, setOpenGroup] = useState<string | null>(null)
 
-
-
-
-
-
-
-
-  const navMain: (NavItem | false)[] = [
+  const navMain = useMemo(() => [
     {
       title: "Overview",
       url: `/dashboard`,
@@ -89,45 +85,7 @@ export function NavMain({ role }: NavMainProps) {
         },
       ]
     },
-    {
-      title: "Warehouse",
-      url: "#",
-      icon: LucideReceiptText,
-      isActive: true,
-      roleField: "product",
-      items: [
-        {
-          title: "Manage Warehouse",
-          url: `/dashboard/warehouse/manage-warehouse`,
-          // roleField: "listProduct"
-        },
-        {
-          title: "Stock Overview",
-          url: `/dashboard/warehouse/stock-overview`,
-          // roleField: "listProduct"
-        },
-        {
-          title: "Low Stock Alert",
-          url: `/dashboard/warehouse/low-stock-alert`,
-          // roleField: "listProduct"
-        },
-        {
-          title: "Stock Adjustment",
-          url: `/dashboard/warehouse/stock-adjustment`,
-          roleField: "stockAdjustment"
-        },
-        {
-          title: "Stock Transfer",
-          url: `/dashboard/warehouse/stock-transfer`,
-          roleField: "stockTransfer"
-        },
-        {
-          title: "Receive Stock",
-          url: `/dashboard/warehouse/receive-stock`,
-          // roleField: "manageCustomer"
-        },
-      ],
-    },
+
     {
       title: "Products",
       url: "#",
@@ -396,7 +354,7 @@ export function NavMain({ role }: NavMainProps) {
         },
         {
           title: "Expenses Report",
-          url: `/dashboardreport//expenses-report`,
+          url: `/dashboard/report/expenses-report`,
           roleField: "expensesReport"
         }, {
           title: "Product Sell Report",
@@ -420,8 +378,7 @@ export function NavMain({ role }: NavMainProps) {
           roleField: "trendingProductReport"
         }, {
           title: "Purchase & Sale Report",
-          url: `/dashboard/report/purchase-sale-report`,
-          // roleField: ""
+          url: `/dashboard/report/purchase-sale-report`
         }, {
           title: "Stock Adjustment Report",
           url: `/dashboard/report/stock-adjustment-report`,
@@ -453,7 +410,7 @@ export function NavMain({ role }: NavMainProps) {
         }, {
           title: "Sale Representative Report",
           url: `/dashboard/report/sale-representative-report`,
-          roleField: "saleRepresentativeReport",
+          roleField: "saleRepresentativeReport"
         }
       ],
     },
@@ -466,12 +423,12 @@ export function NavMain({ role }: NavMainProps) {
         {
           title: "Bulk Emails",
           url: `/dashboard/messaging/bulk-email`,
-          roleField: "message",
+          roleField: "message"
         },
         {
           title: "Email Message",
           url: `/dashboard/messaging/email`,
-          roleField: "message",
+          roleField: "message"
         },
       ],
     },
@@ -487,106 +444,117 @@ export function NavMain({ role }: NavMainProps) {
       icon: Trash,
       isActive: false,
     }
+  ], []);
 
-  ];
   const isActive = useCallback(
     (url: string) => {
       const dashboardPath = `/dashboard`;
-
       if (pathname === dashboardPath || pathname === `${dashboardPath}/`) {
-        return url === pathname; // Only activate when it exactly matches the dashboard
+        return url === pathname;
       }
-
       return pathname.startsWith(url) && url !== dashboardPath;
     },
-    [pathname, ,]
+    [pathname]
   );
 
-  // Automatically open collapsible if an item inside is active
   useEffect(() => {
     navMain.filter((group): group is NavItem => group !== false).forEach((group) => {
       if (group.items?.some((item) => isActive(item.url))) {
         setOpenGroup(group.title);
       }
     });
-  }, [pathname]);
-
+  }, [pathname, isActive, navMain]);
 
   return (
-
     <SidebarGroup className="scrollbar-hide">
       <SidebarGroupLabel>Nav links</SidebarGroupLabel>
-      <SidebarMenu >
+      <SidebarMenu>
         {navMain
           .filter((item): item is NavItem => item !== false)
           .filter((item) => !item.roleField || (role && role[item.roleField as keyof IRole]))
-          .map((item) =>
-            item.items ? (
-              <Collapsible
-                key={item.title}
-                open={openGroup === item.title}
-                onOpenChange={() => setOpenGroup((prev) => (prev === item.title ? null : item.title))}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
+          .map((item) => {
+            const warehouseSection = item.title === "Products" ? (
+              <WarehouseNavSection
+                key="warehouse-section"
+                role={role}
+                openGroup={openGroup}
+                setOpenGroup={setOpenGroup}
+                isActive={isActive}
+                hasWarehouseAccess={hasWarehouseAccess || userRole === "admin"}
+              />
+            ) : null;
+
+            return (
+              <div key={item.title}>
+                {warehouseSection}
+                {item.items ? (
+                  <Collapsible
+                    open={openGroup === item.title}
+                    onOpenChange={() => setOpenGroup(openGroup === item.title ? null : item.title)}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={item.title}
+                          className={cn(
+                            "transition-colors hover:bg-primary/10 hover:text-primary",
+                            item.items?.some((subItem) => isActive(subItem.url)) && "bg-primary text-white font-medium"
+                          )}
+                        >
+                          {item.icon && <item.icon />}
+                          <span>{item.title}</span>
+                          <ChevronRight
+                            className={`ml-auto shrink-0 transition-transform duration-200 ${
+                              openGroup === item.title ? "rotate-90" : ""
+                            }`}
+                          />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items
+                            ?.filter((subItem) => !subItem?.roleField || (role && role[subItem?.roleField as keyof IRole]))
+                            .map((subItem) => (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                <SidebarMenuSubButton
+                                  asChild
+                                  className={cn(
+                                    "transition-colors hover:text-primary",
+                                    isActive(subItem.url) && "bg-primary/10 text-primary font-medium"
+                                  )}
+                                >
+                                  <Link href={subItem.url}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ) : (
+                  <SidebarMenuItem>
                     <SidebarMenuButton
+                      asChild
                       tooltip={item.title}
                       className={cn(
                         "transition-colors hover:bg-primary/10 hover:text-primary",
-                        item.items?.some((subItem) => isActive(subItem.url)) && "bg-primary text-white font-medium",
+                        isActive(item.url) && "bg-primary text-white font-medium"
                       )}
                     >
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                      <ChevronRight
-                        className={`ml-auto shrink-0 transition-transform duration-200 ${openGroup === item.title ? "rotate-90" : ""}`}
-                      />
+                      <Link href={item.url}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                      </Link>
                     </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {item.items
-                        ?.filter((subItem) => !subItem?.roleField || (role && role[subItem?.roleField as keyof IRole]))
-                        .map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              className={cn(
-                                "transition-colors hover:text-primary",
-                                isActive(subItem.url) && "bg-primary/10 text-primary font-medium",
-                              )}
-                            >
-                              <Link href={subItem.url}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-            ) : (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  asChild
-                  tooltip={item.title}
-                  className={cn(
-                    "transition-colors hover:bg-primary/10 hover:text-primary",
-                    isActive(item.url) && "bg-primary text-white font-medium",
-                  )}
-                >
-                  <Link href={item.url}>
-                    {item.icon && <item.icon />}
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ),
-          )}
+                  </SidebarMenuItem>
+                )}
+              </div>
+            );
+          })}
       </SidebarMenu>
     </SidebarGroup>
-
-  )
-}
+  );
+}     

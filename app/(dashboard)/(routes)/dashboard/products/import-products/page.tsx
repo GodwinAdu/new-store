@@ -1,9 +1,5 @@
-import React from 'react'
+import ImportProductsClient from "./_components/import-products-client"
 
-const page = () => {
-  return (
-    <div>page</div>
-  )
+export default function ImportProductsPage() {
+  return <ImportProductsClient />
 }
-
-export default page

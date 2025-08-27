@@ -1,93 +1,73 @@
 "use client"
 
-import { AlertTriangle, Package } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { AlertTriangle, Package, Plus } from "lucide-react"
 
-const lowStockItems = [
-    {
-        name: "iPhone Cases",
-        currentStock: 5,
-        minStock: 20,
-        status: "Critical",
-        sku: "IPH-CASE-001",
-    },
-    {
-        name: "Screen Protectors",
-        currentStock: 12,
-        minStock: 25,
-        status: "Low",
-        sku: "SCR-PROT-002",
-    },
-    {
-        name: "Charging Cables",
-        currentStock: 8,
-        minStock: 30,
-        status: "Critical",
-        sku: "CHG-CBL-003",
-    },
-    {
-        name: "Power Banks",
-        currentStock: 15,
-        minStock: 20,
-        status: "Low",
-        sku: "PWR-BNK-004",
-    },
-]
-
-const getStatusColor = (status: string) => {
-    switch (status) {
-        case "Critical":
-            return "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900 dark:text-red-300"
-        case "Low":
-            return "bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900 dark:text-orange-300"
-        default:
-            return "bg-gray-100 text-gray-800 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300"
-    }
-}
-
-export function LowStockAlerts() {
+export function LowStockAlerts({ data }: { data: any }) {
     return (
         <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-bold">
-                    <div className="p-1.5 rounded-lg bg-orange-100 dark:bg-orange-900">
-                        <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle className="text-xl font-bold flex items-center">
+                            <AlertTriangle className="h-5 w-5 mr-2 text-orange-500" />
+                            Stock Alerts
+                        </CardTitle>
+                        <CardDescription>Items running low on inventory</CardDescription>
                     </div>
-                    Stock Alerts
-                </CardTitle>
-                <CardDescription>Items that need immediate restocking</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {lowStockItems.map((item) => (
-                    <div
-                        key={item.sku}
-                        className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                    <Badge 
+                        variant={data.lowStockCount > 0 ? "destructive" : "secondary"}
+                        className={data.lowStockCount > 0 ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200" : ""}
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900">
-                                <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <div className="space-y-1">
-                                <p className="font-medium">{item.name}</p>
-                                <p className="text-xs text-muted-foreground">SKU: {item.sku}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    {item.currentStock} left (min: {item.minStock})
+                        {data.lowStockCount || 0} alerts
+                    </Badge>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    {data.lowStockCount === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <Package className="h-12 w-12 mx-auto mb-2 opacity-50 text-green-500" />
+                            <p className="font-medium text-green-600 dark:text-green-400">All items well stocked!</p>
+                            <p className="text-sm">No low stock alerts at this time</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                                <div className="flex items-center space-x-2">
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                    <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+                                        {data.lowStockCount} item{data.lowStockCount !== 1 ? 's' : ''} need restocking
+                                    </p>
+                                </div>
+                                <p className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                                    Consider restocking these items to avoid stockouts
                                 </p>
                             </div>
-                        </div>
-                        <div className="text-right space-y-2">
-                            <Badge className={getStatusColor(item.status)}>{item.status}</Badge>
-                            <Button size="sm" variant="outline" className="w-full text-xs bg-transparent">
-                                Reorder
-                            </Button>
-                        </div>
-                    </div>
-                ))}
-                <Button className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white">
-                    View All Alerts
-                </Button>
+                            
+                            <div className="space-y-3">
+                                {/* Placeholder for actual low stock items */}
+                                <div className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center">
+                                            <Package className="h-4 w-4 text-orange-600" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium">Low stock items</p>
+                                            <p className="text-xs text-muted-foreground">Check inventory for details</p>
+                                        </div>
+                                    </div>
+                                    <Button variant="outline" size="sm">
+                                        <Plus className="h-4 w-4 mr-1" />
+                                        Restock
+                                    </Button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
             </CardContent>
         </Card>
     )

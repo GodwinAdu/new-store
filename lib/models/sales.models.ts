@@ -42,6 +42,14 @@ const saleSchema = new Schema<ISale>(
     totalCost: Number,
     profit: Number,
     saleDate: { type: Date, default: Date.now },
+    paymentMethod: { type: String, enum: ['cash', 'card', 'mobile'], default: 'cash' },
+    subtotal: { type: Number },
+    discount: { type: Number, default: 0 },
+    tax: { type: Number, default: 0 },
+    cashReceived: { type: Number },
+    isVoided: { type: Boolean, default: false },
+    voidReason: { type: String },
+    voidedAt: { type: Date }
   },
   { timestamps: true }
 );

@@ -6,6 +6,7 @@ import WarehouseModal from './_components/warehouse-modal'
 import { columns } from './_components/column'
 import { fetchAllWarehouses } from '@/lib/actions/warehouse.actions'
 import { fetchAllStaffs } from '@/lib/actions/employee.actions'
+import { WarehouseProvider } from '@/components/warehouse/warehouse-provider'
 
 
 
@@ -16,7 +17,7 @@ const page = async () => {
   ])
 
   return (
-    <>
+    <WarehouseProvider showSelector={true} className="mb-4">
       <div className="flex justify-between items-center">
         <Heading title='Manage Warehouses' />
         <div className="flex items-center gap-2">
@@ -27,7 +28,7 @@ const page = async () => {
       <div className="py-4">
         <DataTable searchKey='name' data={data} columns={columns} />
       </div>
-    </>
+    </WarehouseProvider>
   )
 }
 

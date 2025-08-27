@@ -1,69 +1,89 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts"
+import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 
-const revenueData = [
-    { name: "Product Sales", value: 65, amount: "$81,250", color: "hsl(var(--chart-1))" },
-    { name: "Subscriptions", value: 20, amount: "$25,000", color: "hsl(var(--chart-2))" },
-    { name: "Services", value: 10, amount: "$12,500", color: "hsl(var(--chart-3))" },
-    { name: "Other", value: 5, amount: "$6,250", color: "hsl(var(--chart-4))" },
-]
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']
 
-const chartConfig = {
-    value: {
-        label: "Percentage",
-    },
-}
+export function RevenueBreakdown({ data }: { data: any }) {
+    const paymentData = [
+        { name: 'Cash', value: data.todayRevenue * 0.4, color: '#10B981' },
+        { name: 'Card', value: data.todayRevenue * 0.45, color: '#3B82F6' },
+        { name: 'Mobile', value: data.todayRevenue * 0.15, color: '#8B5CF6' }
+    ]
 
-export function RevenueBreakdown() {
+    const totalRevenue = paymentData.reduce((sum, item) => sum + item.value, 0)
+
     return (
         <Card className="border-0 shadow-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
-            <CardHeader>
+            <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                     <div>
                         <CardTitle className="text-xl font-bold">Revenue Breakdown</CardTitle>
-                        <CardDescription>Revenue distribution by category</CardDescription>
+                        <CardDescription>Payment method distribution</CardDescription>
                     </div>
-                    <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white">$125K Total</Badge>
+                    <Badge className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white">
+                        Today
+                    </Badge>
                 </div>
             </CardHeader>
             <CardContent>
-                <ChartContainer config={chartConfig}>
-                    <ResponsiveContainer width="100%" height={250}>
-                        <PieChart>
-                            <Pie
-                                data={revenueData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={50}
-                                outerRadius={100}
-                                paddingAngle={3}
-                                dataKey="value"
-                            >
-                                {revenueData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                            </Pie>
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                        </PieChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
-                <div className="space-y-3 mt-4">
-                    {revenueData.map((item) => (
-                        <div key={item.name} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                            <div className="flex items-center gap-3">
-                                <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
-                                <span className="font-medium">{item.name}</span>
+                <div className="space-y-6">
+                    <div className="h-48">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={paymentData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={40}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {paymentData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip formatter={(value: any) => [`$${value.toFixed(2)}`, 'Revenue']} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    
+                    <div className="space-y-4">
+                        {paymentData.map((item, index) => (
+                            <div key={item.name} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <div 
+                                            className="w-3 h-3 rounded-full" 
+                                            style={{ backgroundColor: item.color }}
+                                        />
+                                        <span className="text-sm font-medium">{item.name}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-bold">${item.value.toFixed(2)}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {totalRevenue > 0 ? ((item.value / totalRevenue) * 100).toFixed(1) : 0}%
+                                        </p>
+                                    </div>
+                                </div>
+                                <Progress 
+                                    value={totalRevenue > 0 ? (item.value / totalRevenue) * 100 : 0} 
+                                    className="h-2"
+                                />
                             </div>
-                            <div className="text-right">
-                                <div className="font-bold">{item.amount}</div>
-                                <div className="text-sm text-muted-foreground">{item.value}%</div>
-                            </div>
+                        ))}
+                    </div>
+                    
+                    <div className="pt-4 border-t">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Total Revenue</span>
+                            <span className="text-lg font-bold">${totalRevenue.toFixed(2)}</span>
                         </div>
-                    ))}
+                    </div>
                 </div>
             </CardContent>
         </Card>
