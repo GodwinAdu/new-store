@@ -1,19 +1,19 @@
 import { Schema, models, model } from 'mongoose';
 
-export interface IExpense {
+export interface IIncome {
   description: string;
   amount: number;
   category: string;
   account: Schema.Types.ObjectId;
   date: Date;
-  status: 'pending' | 'paid' | 'cancelled';
+  status: 'pending' | 'received' | 'cancelled';
   paymentMethod?: string;
   reference?: string;
   notes?: string;
   createdBy: Schema.Types.ObjectId;
 }
 
-const expenseSchema = new Schema<IExpense>({
+const incomeSchema = new Schema<IIncome>({
   description: { type: String, required: true },
   amount: { type: Number, required: true },
   category: { type: String, required: true },
@@ -21,7 +21,7 @@ const expenseSchema = new Schema<IExpense>({
   date: { type: Date, default: Date.now },
   status: {
     type: String,
-    enum: ['pending', 'paid', 'cancelled'],
+    enum: ['pending', 'received', 'cancelled'],
     default: 'pending'
   },
   paymentMethod: String,
@@ -30,6 +30,6 @@ const expenseSchema = new Schema<IExpense>({
   createdBy: { type: Schema.Types.ObjectId, ref: 'Staff', required: true }
 }, { timestamps: true });
 
-const Expense = models.Expense ?? model<IExpense>('Expense', expenseSchema);
+const Income = models.Income ?? model<IIncome>('Income', incomeSchema);
 
-export default Expense;
+export default Income;

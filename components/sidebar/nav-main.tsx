@@ -83,6 +83,21 @@ export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
           url: `/dashboard/transport/shipment-management`,
           // roleField: "shipmentManagement"
         },
+        {
+          title: "Stock Transfer",
+          url: `/dashboard/transport/stock-transfer`,
+          // roleField: "stockTransfer"
+        },
+        {
+          title: "Warehouse Management",
+          url: `/dashboard/transport/warehouse-management`,
+          // roleField: "warehouseManagement"
+        },
+        {
+          title: "Delivery Tracking",
+          url: `/dashboard/transport/delivery-tracking`,
+          // roleField: "deliveryTracking"
+        },
       ]
     },
 
@@ -154,12 +169,12 @@ export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
       items: [
         {
           title: "All Sales",
-          url: `/dashboard/sales/all-sales`,
+          url: `/dashboard/sales/list-orders`,
           roleField: "manageAllSales"
         },
         {
           title: "Add Sales",
-          url: `/dashboard/sales/add-sales`,
+          url: `/dashboard/sales/add-orders`,
           roleField: "manageSales"
         },
         {
@@ -197,24 +212,19 @@ export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
       roleField: "purchase",
       items: [
         {
-          title: "List Purchase",
-          url: `/dashboard/purchase/list-purchase`,
+          title: "All Orders",
+          url: `/dashboard/purchase/list-orders`,
           roleField: "listPurchase"
         },
         {
-          title: "Purchase Groups",
-          url: `/dashboard/purchase/list-purchase`,
-          roleField: "listPurchase"
-        },
-        {
-          title: "Add Purchase",
-          url: `/dashboard/purchase/add-purchase`,
+          title: "Add Order",
+          url: `/dashboard/purchase/add-order`,
           roleField: "managePurchase"
         },
         {
-          title: "List Purchase Return",
-          url: `/dashboard/purchase/list-purchase-return`,
-          roleField: "listPurchaseReturn"
+          title: "Receive Orders",
+          url: `/dashboard/purchase/receive-orders`,
+          roleField: "managePurchase"
         },
         {
           title: "Suppliers",

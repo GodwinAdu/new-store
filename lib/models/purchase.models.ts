@@ -1,30 +1,77 @@
-// models/Purchase.ts
-
 import { Schema, models, model } from 'mongoose';
 
+export interface IPurchase {
+  supplier: Schema.Types.ObjectId;
+  items: Array<{
+    product: Schema.Types.ObjectId;
+    quantity: number;
+    unitCost: number;
+    totalCost: number;
+  }>;
+  orderType: 'regular' | 'transport' | 'wholesale';
+  status: 'pending' | 'ordered' | 'shipped' | 'received' | 'cancelled';
+  transportDetails?: {
+    carrier: string;
+    trackingNumber?: string;
+    estimatedDelivery?: Date;
+    shippingCost: number;
+  };
+  wholesaleDetails?: {
+    bulkDiscount: number;
+    minimumQuantity: number;
+    contractNumber?: string;
+  };
+  subtotal: number;
+  shippingCost: number;
+  discount: number;
+  totalCost: number;
+  orderDate: Date;
+  receivedDate?: Date;
+  notes?: string;
+}
 
 const purchaseSchema = new Schema<IPurchase>({
-    warehouse: {
-        type: Schema.Types.ObjectId,
-        ref: 'Warehouse',
-        required: true,
+  supplier: {
+    type: Schema.Types.ObjectId,
+    ref: 'Supplier',
+    required: true,
+  },
+  items: [
+    {
+      product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+      quantity: { type: Number, required: true },
+      unitCost: { type: Number, required: true },
+      totalCost: { type: Number, required: true },
     },
-    items: [
-        {
-            product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
-            quantity: { type: Number, required: true },
-            unitPrice: { type: Number, required: true },
-        },
-    ],
-    transportCost: { type: Number, default: 0 },
-    tax: { type: Number, default: 0 },
-    otherExpenses: { type: Number, default: 0 },
-    purchaseDate: { type: Date, default: Date.now },
-    createdBy:{
-        type:Schema.Types.ObjectId,
-        ref:"Staff",
-        required:true
-    }
+  ],
+  orderType: {
+    type: String,
+    enum: ['regular', 'transport', 'wholesale'],
+    default: 'regular'
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'ordered', 'shipped', 'received', 'cancelled'],
+    default: 'pending'
+  },
+  transportDetails: {
+    carrier: String,
+    trackingNumber: String,
+    estimatedDelivery: Date,
+    shippingCost: { type: Number, default: 0 }
+  },
+  wholesaleDetails: {
+    bulkDiscount: { type: Number, default: 0 },
+    minimumQuantity: { type: Number, default: 0 },
+    contractNumber: String
+  },
+  subtotal: { type: Number, required: true },
+  shippingCost: { type: Number, default: 0 },
+  discount: { type: Number, default: 0 },
+  totalCost: { type: Number, required: true },
+  orderDate: { type: Date, default: Date.now },
+  receivedDate: Date,
+  notes: String
 }, { timestamps: true });
 
 const Purchase = models.Purchase ?? model<IPurchase>('Purchase', purchaseSchema);
