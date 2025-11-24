@@ -4,8 +4,11 @@ export interface IPurchase {
   supplier: Schema.Types.ObjectId;
   items: Array<{
     product: Schema.Types.ObjectId;
+    unit: Schema.Types.ObjectId;
     quantity: number;
-    unitCost: number;
+    baseQuantity: number;
+    unitPrice: number;
+    baseUnitPrice: number;
     totalCost: number;
   }>;
   orderType: 'regular' | 'transport' | 'wholesale';
@@ -39,8 +42,11 @@ const purchaseSchema = new Schema<IPurchase>({
   items: [
     {
       product: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+      unit: { type: Schema.Types.ObjectId, ref: 'Unit', required: true },
       quantity: { type: Number, required: true },
-      unitCost: { type: Number, required: true },
+      baseQuantity: { type: Number, required: true },
+      unitPrice: { type: Number, required: true },
+      baseUnitPrice: { type: Number, required: true },
       totalCost: { type: Number, required: true },
     },
   ],

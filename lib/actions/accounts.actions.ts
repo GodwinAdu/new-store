@@ -36,8 +36,7 @@ export async function getExpenses() {
     
     const expenses = await Expense.find()
       .populate('account', 'name type')
-      .populate('createdBy', 'name')
-      .sort({ date: -1 })
+      .sort({ createdAt: -1 })
       .limit(50);
     
     // Create sample expenses if none exist
@@ -46,27 +45,59 @@ export async function getExpenses() {
       if (accounts.length > 0) {
         const sampleExpenses = [
           {
-            description: 'Office Rent',
+            description: 'Office Rent Payment',
             amount: 2500,
             category: 'Rent',
             account: accounts[0]._id,
-            date: new Date('2024-12-01'),
+            date: new Date(),
             status: 'paid',
-            createdBy: '507f1f77bcf86cd799439011'
+            paymentMethod: 'Bank Transfer',
+            reference: 'RENT-001'
           },
           {
-            description: 'Utilities',
+            description: 'Electricity Bill',
             amount: 450,
             category: 'Utilities',
             account: accounts[0]._id,
-            date: new Date('2024-12-05'),
+            date: new Date(Date.now() - 86400000),
             status: 'paid',
-            createdBy: '507f1f77bcf86cd799439011'
+            paymentMethod: 'Online Payment',
+            reference: 'UTIL-001'
+          },
+          {
+            description: 'Marketing Campaign',
+            amount: 1200,
+            category: 'Marketing',
+            account: accounts[1]._id,
+            date: new Date(Date.now() - 172800000),
+            status: 'pending',
+            paymentMethod: 'Credit Card',
+            reference: 'MKT-001'
+          },
+          {
+            description: 'Office Supplies',
+            amount: 350,
+            category: 'Supplies',
+            account: accounts[0]._id,
+            date: new Date(Date.now() - 259200000),
+            status: 'paid',
+            paymentMethod: 'Cash',
+            reference: 'SUP-001'
           }
         ];
         
         await Expense.insertMany(sampleExpenses);
-        return await Expense.find().populate('account', 'name type').populate('createdBy', 'name').sort({ date: -1 }).limit(50);
+        
+        // Update account balances
+        for (const expense of sampleExpenses) {
+          if (expense.status === 'paid') {
+            await Account.findByIdAndUpdate(expense.account, {
+              $inc: { balance: -expense.amount }
+            });
+          }
+        }
+        
+        return await Expense.find().populate('account', 'name type').sort({ createdAt: -1 }).limit(50);
       }
     }
     
@@ -82,8 +113,7 @@ export async function getIncomes() {
     
     const incomes = await Income.find()
       .populate('account', 'name type')
-      .populate('createdBy', 'name')
-      .sort({ date: -1 })
+      .sort({ createdAt: -1 })
       .limit(50);
     
     // Create sample incomes if none exist
@@ -92,27 +122,49 @@ export async function getIncomes() {
       if (accounts.length > 0) {
         const sampleIncomes = [
           {
-            description: 'Product Sales',
+            description: 'Product Sales Revenue',
             amount: 15000,
             category: 'Sales',
             account: accounts[0]._id,
-            date: new Date('2024-12-01'),
+            date: new Date(),
             status: 'received',
-            createdBy: '507f1f77bcf86cd799439011'
+            paymentMethod: 'Bank Transfer',
+            reference: 'SAL-001'
           },
           {
-            description: 'Service Revenue',
+            description: 'Consulting Services',
             amount: 3500,
             category: 'Services',
-            account: accounts[0]._id,
-            date: new Date('2024-12-05'),
+            account: accounts[1]._id,
+            date: new Date(Date.now() - 86400000),
             status: 'received',
-            createdBy: '507f1f77bcf86cd799439011'
+            paymentMethod: 'Online Payment',
+            reference: 'SRV-001'
+          },
+          {
+            description: 'Investment Returns',
+            amount: 1200,
+            category: 'Investment',
+            account: accounts[2]._id,
+            date: new Date(Date.now() - 172800000),
+            status: 'pending',
+            paymentMethod: 'Bank Transfer',
+            reference: 'INV-001'
           }
         ];
         
         await Income.insertMany(sampleIncomes);
-        return await Income.find().populate('account', 'name type').populate('createdBy', 'name').sort({ date: -1 }).limit(50);
+        
+        // Update account balances
+        for (const income of sampleIncomes) {
+          if (income.status === 'received') {
+            await Account.findByIdAndUpdate(income.account, {
+              $inc: { balance: income.amount }
+            });
+          }
+        }
+        
+        return await Income.find().populate('account', 'name type').sort({ createdAt: -1 }).limit(50);
       }
     }
     
@@ -194,12 +246,30 @@ export async function createExpense(expenseData: {
   notes?: string;
 }) {
   try {
+    const { requirePermission } = await import('@/lib/middleware/auth');
+    await requirePermission('addExpenses');
+    
     await connectToDB();
+    
+    // Check account balance for non-cash accounts
+    const account = await Account.findById(expenseData.accountId);
+    if (!account) {
+      throw new Error('Account not found');
+    }
+    
+    if (account.type !== 'cash' && account.balance < expenseData.amount) {
+      throw new Error('Insufficient funds in account');
+    }
     
     const expense = await Expense.create({
       ...expenseData,
       account: expenseData.accountId,
       createdBy: '507f1f77bcf86cd799439011' // Mock user ID
+    });
+    
+    // Update account balance
+    await Account.findByIdAndUpdate(expenseData.accountId, {
+      $inc: { balance: -expenseData.amount }
     });
     
     return JSON.parse(JSON.stringify(expense));
@@ -218,6 +288,9 @@ export async function updateExpense(expenseId: string, updateData: {
   notes?: string;
 }) {
   try {
+    const { requirePermission } = await import('@/lib/middleware/auth');
+    await requirePermission('editExpenses');
+    
     await connectToDB();
     
     const expense = await Expense.findByIdAndUpdate(expenseId, updateData, { new: true })
@@ -235,6 +308,9 @@ export async function updateExpense(expenseId: string, updateData: {
 
 export async function deleteExpense(expenseId: string) {
   try {
+    const { requirePermission } = await import('@/lib/middleware/auth');
+    await requirePermission('deleteExpenses');
+    
     await connectToDB();
     
     const expense = await Expense.findByIdAndDelete(expenseId);
@@ -265,6 +341,11 @@ export async function createIncome(incomeData: {
       ...incomeData,
       account: incomeData.accountId,
       createdBy: '507f1f77bcf86cd799439011' // Mock user ID
+    });
+    
+    // Update account balance
+    await Account.findByIdAndUpdate(incomeData.accountId, {
+      $inc: { balance: incomeData.amount }
     });
     
     return JSON.parse(JSON.stringify(income));
@@ -395,7 +476,7 @@ export async function getAccountTransactions(accountId: string) {
   }
 }
 
-export async function getBalanceSheetData() {
+export async function getAccountsSummary() {
   try {
     await connectToDB();
     
@@ -405,38 +486,62 @@ export async function getBalanceSheetData() {
       Income.find({ status: 'received' })
     ]);
     
-    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const totalIncomes = incomes.reduce((sum, income) => sum + income.amount, 0);
-    const totalAssets = accounts.filter(acc => acc.type === 'asset' || acc.type === 'cash' || acc.type === 'bank').reduce((sum, acc) => sum + acc.balance, 0);
-    const totalLiabilities = accounts.filter(acc => acc.type === 'liability').reduce((sum, acc) => sum + acc.balance, 0);
-    const totalEquity = accounts.filter(acc => acc.type === 'equity').reduce((sum, acc) => sum + acc.balance, 0);
+    const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const totalIncomes = incomes.reduce((sum, inc) => sum + inc.amount, 0);
+    const netProfit = totalIncomes - totalExpenses;
     
     return {
-      assets: {
-        current: [
-          { name: 'Cash and Cash Equivalents', amount: accounts.filter(acc => acc.type === 'cash').reduce((sum, acc) => sum + acc.balance, 0) },
-          { name: 'Bank Accounts', amount: accounts.filter(acc => acc.type === 'bank').reduce((sum, acc) => sum + acc.balance, 0) }
-        ],
-        fixed: [
-          { name: 'Equipment', amount: 50000 },
-          { name: 'Furniture', amount: 15000 }
-        ]
-      },
-      liabilities: {
-        current: [
-          { name: 'Accounts Payable', amount: totalLiabilities * 0.6 },
-          { name: 'Accrued Expenses', amount: totalExpenses * 0.1 }
-        ],
-        longTerm: [
-          { name: 'Long-term Debt', amount: totalLiabilities * 0.4 }
-        ]
-      },
-      equity: [
-        { name: 'Owner\'s Capital', amount: totalEquity || 80000 },
-        { name: 'Retained Earnings', amount: totalIncomes - totalExpenses }
-      ]
+      totalBalance,
+      totalExpenses,
+      totalIncomes,
+      netProfit,
+      accountsCount: accounts.length,
+      expensesCount: expenses.length,
+      incomesCount: incomes.length
     };
   } catch (error) {
-    throw new Error('Failed to fetch balance sheet data');
+    throw new Error('Failed to fetch accounts summary');
+  }
+}
+
+export async function getMonthlyReport(year: number, month: number) {
+  try {
+    await connectToDB();
+    
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    
+    const [expenses, incomes] = await Promise.all([
+      Expense.find({
+        date: { $gte: startDate, $lte: endDate },
+        status: 'paid'
+      }).populate('account', 'name'),
+      Income.find({
+        date: { $gte: startDate, $lte: endDate },
+        status: 'received'
+      }).populate('account', 'name')
+    ]);
+    
+    const expensesByCategory = expenses.reduce((acc, exp) => {
+      acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
+      return acc;
+    }, {});
+    
+    const incomesByCategory = incomes.reduce((acc, inc) => {
+      acc[inc.category] = (acc[inc.category] || 0) + inc.amount;
+      return acc;
+    }, {});
+    
+    return {
+      period: `${year}-${month.toString().padStart(2, '0')}`,
+      totalExpenses: expenses.reduce((sum, exp) => sum + exp.amount, 0),
+      totalIncomes: incomes.reduce((sum, inc) => sum + inc.amount, 0),
+      expensesByCategory,
+      incomesByCategory,
+      transactions: [...expenses, ...incomes].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    };
+  } catch (error) {
+    throw new Error('Failed to fetch monthly report');
   }
 }

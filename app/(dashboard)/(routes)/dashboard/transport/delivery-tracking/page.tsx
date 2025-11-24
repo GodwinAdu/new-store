@@ -61,8 +61,8 @@ export default function DeliveryTracking() {
     if (searchTerm) {
       filtered = filtered.filter(shipment =>
         shipment.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        shipment.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        shipment.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        shipment.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        shipment.destinationWarehouse?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         shipment.driver?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -252,7 +252,7 @@ export default function DeliveryTracking() {
                       <div className="font-medium text-lg">{shipment.trackingNumber}</div>
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <MapPin className="h-4 w-4" />
-                        {shipment.origin} → {shipment.destination}
+                        {shipment.supplier} → {shipment.destinationWarehouse?.name || 'Warehouse'}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                         {shipment.driver && (

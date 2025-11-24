@@ -21,10 +21,8 @@ import {
   Menu,
   X
 } from 'lucide-react'
-import { POSAnalytics } from './pos-analytics'
-import { InventoryManagement } from './inventory-management'
 import { CustomerManagement } from './customer-management'
-import { SalesComplete } from './sales-complete'
+import { SalesHistory } from './sales-history'
 
 interface POSLayoutProps {
   children: React.ReactNode
@@ -47,8 +45,6 @@ export function POSLayout({ children }: POSLayoutProps) {
   const tabs = [
     { id: 'pos', label: 'Point of Sale', icon: ShoppingCart },
     { id: 'sales', label: 'Sales', icon: Receipt },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'customers', label: 'Customers', icon: Users },
   ]
 
@@ -143,7 +139,7 @@ export function POSLayout({ children }: POSLayoutProps) {
         <div className={`${isSidebarOpen ? 'block' : 'hidden'} lg:block mb-6`}>
           <Card className="p-2">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 gap-2">
+              <TabsList className="grid w-full grid-cols-2 lg:grid-cols-3 gap-2">
                 {tabs.map(tab => {
                   const Icon = tab.icon
                   return (
@@ -181,41 +177,11 @@ export function POSLayout({ children }: POSLayoutProps) {
                     Sales Report
                   </Button>
                 </div>
-                <SalesComplete />
+                <SalesHistory />
               </div>
             </TabsContent>
             
-            <TabsContent value="analytics" className="mt-0">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">Analytics Dashboard</h2>
-                    <p className="text-muted-foreground">Real-time sales and performance metrics</p>
-                  </div>
-                  <Button variant="outline">
-                    <Receipt className="h-4 w-4 mr-2" />
-                    Export Report
-                  </Button>
-                </div>
-                <POSAnalytics />
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="inventory" className="mt-0">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">Inventory Management</h2>
-                    <p className="text-muted-foreground">Track stock levels and manage products</p>
-                  </div>
-                  <Button variant="outline">
-                    <Package className="h-4 w-4 mr-2" />
-                    Stock Report
-                  </Button>
-                </div>
-                <InventoryManagement />
-              </div>
-            </TabsContent>
+
             
             <TabsContent value="customers" className="mt-0">
               <div className="space-y-6">

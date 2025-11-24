@@ -40,26 +40,12 @@ export function WarehouseNavSection({
 
   const warehouseItems = [
     {
-      title: "Manage Warehouse",
-      url: `/dashboard/warehouse/manage-warehouse`,
+      title: "Warehouse Management",
+      url: `/dashboard/warehouse`,
     },
     {
-      title: "Stock Overview",
-      url: `/dashboard/warehouse/stock-overview`,
-    },
-    {
-      title: "Low Stock Alert",
-      url: `/dashboard/warehouse/low-stock-alert`,
-    },
-    {
-      title: "Stock Adjustment",
-      url: `/dashboard/warehouse/stock-adjustment`,
-      roleField: "stockAdjustment"
-    },
-    {
-      title: "Stock Transfer",
-      url: `/dashboard/warehouse/stock-transfer`,
-      roleField: "stockTransfer"
+      title: "Warehouse Analytics",
+      url: `/dashboard/warehouse/analytics`,
     },
     {
       title: "Receive Stock",

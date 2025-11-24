@@ -26,7 +26,9 @@ import { PlusCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { createUnit } from "@/lib/actions/unit.actions";
+import { createUnit, fetchBaseUnits } from "@/lib/actions/unit.actions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffect, useState } from "react";
 
 
 
@@ -34,22 +36,51 @@ const formSchema = z.object({
     name: z.string().min(2, {
         message: "name must be at least 2 characters.",
     }),
+    shortName: z.string().optional(),
+    unitType: z.enum(["base", "derived"]),
+    baseUnit: z.string().optional(),
+    conversionFactor: z.number().min(1).optional(),
     isActive: z.boolean()
+}).refine((data) => {
+    if (data.unitType === "derived") {
+        return data.baseUnit && data.conversionFactor && data.conversionFactor > 0;
+    }
+    return true;
+}, {
+    message: "Derived units must have a base unit and conversion factor greater than 0",
+    path: ["conversionFactor"]
 });
 
 export function UnitModal() {
-
+    const [baseUnits, setBaseUnits] = useState<any[]>([]);
     const router = useRouter();
     // 1. Define your form.
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: "",
+            shortName: "",
+            unitType: "base",
+            baseUnit: "",
+            conversionFactor: 1,
             isActive: false,
         },
     });
 
     const { isSubmitting } = form.formState;
+    const watchUnitType = form.watch("unitType");
+
+    useEffect(() => {
+        const loadBaseUnits = async () => {
+            try {
+                const units = await fetchBaseUnits();
+                setBaseUnits(units);
+            } catch (error) {
+                console.error('Failed to fetch base units:', error);
+            }
+        };
+        loadBaseUnits();
+    }, []);
 
     // 2. Define a submit handler.
     async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -81,7 +112,7 @@ export function UnitModal() {
             <DialogContent className="sm:max-w-[425px] w-[96%]">
                 <DialogHeader>
                     <DialogTitle>Create Product Unit</DialogTitle>
-                    <DialogDescription>Creating a new Product Unit .</DialogDescription>
+                    <DialogDescription>Create base units (piece) or derived units (box, dozen) with conversion factors.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <Form {...form}>
@@ -91,10 +122,10 @@ export function UnitModal() {
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Enter Unit Name</FormLabel>
+                                        <FormLabel>Unit Name</FormLabel>
                                         <FormControl>
                                             <Input
-                                                placeholder="Eg. Minerals"
+                                                placeholder="e.g., Box, Dozen, Piece"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -102,6 +133,93 @@ export function UnitModal() {
                                     </FormItem>
                                 )}
                             />
+
+                            <FormField
+                                control={form.control}
+                                name="shortName"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Short Name (Optional)</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                placeholder="e.g., pcs, dz, box"
+                                                {...field}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="unitType"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Unit Type</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select unit type" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="base">Base Unit (e.g., Piece)</SelectItem>
+                                                <SelectItem value="derived">Derived Unit (e.g., Box, Dozen)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            {watchUnitType === "derived" && (
+                                <>
+                                    <FormField
+                                        control={form.control}
+                                        name="baseUnit"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Base Unit</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select base unit" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {baseUnits.map((unit) => (
+                                                            <SelectItem key={unit._id} value={unit._id}>
+                                                                {unit.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="conversionFactor"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Conversion Factor</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="e.g., 12 (1 dozen = 12 pieces)"
+                                                        {...field}
+                                                        onChange={(e) => field.onChange(Number(e.target.value))}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </>
+                            )}
 
                             <FormField
                                 control={form.control}

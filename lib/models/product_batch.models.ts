@@ -8,7 +8,9 @@ const productBatchSchema = new Schema<IProductBatch>({
     type: String,
     unique: true, // Optional: prevents duplicates if multiple users create same batch
   },
-  unitCost: { type: Number, required: true },
+  unitCost: { type: Number, required: true }, // Total cost including shipping
+  originalUnitCost: { type: Number }, // Original cost without shipping
+  shippingCostPerUnit: { type: Number, default: 0 }, // Shipping cost per unit
   sellingPrice: { type: Number, required: true },
   quantity: { type: Number, required: true },
   remaining: { type: Number, required: true },
@@ -16,7 +18,9 @@ const productBatchSchema = new Schema<IProductBatch>({
   depletedAt: { type: Date },
   expiryDate: { type: Date },
   status: { type: String },
-  additionalExpenses: { type: Number,default:0 },
+  additionalExpenses: { type: Number, default: 0 },
+  purchaseOrder: { type: Schema.Types.ObjectId, ref: 'Purchase' }, // Track source purchase order
+  receivedDate: { type: Date }, // When this batch was received
   notes: { type: String },
   createdBy: {
     type: Schema.Types.ObjectId,
@@ -26,7 +30,7 @@ const productBatchSchema = new Schema<IProductBatch>({
   modifiedBy: {
     type: Schema.Types.ObjectId,
     ref: "Staff",
-    default: null
+    default: null,
   },
   del_flag: {
     type: Boolean,

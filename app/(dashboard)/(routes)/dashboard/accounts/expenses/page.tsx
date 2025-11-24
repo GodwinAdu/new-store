@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from '@/components/ui/textarea';
 import { TrendingDown, Plus, Calendar, Edit, Trash2, Search, Filter } from 'lucide-react';
 import { getExpenses, createExpense, updateExpense, deleteExpense, getAccounts } from '@/lib/actions/accounts.actions';
+import PermissionGuard, { useAuth } from '@/components/auth/PermissionGuard';
 
 interface Expense {
   _id: string;
@@ -37,6 +38,7 @@ interface Account {
 }
 
 export default function Expenses() {
+  const { hasPermission } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -170,8 +172,54 @@ export default function Expenses() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Expenses</h1>
+            <p className="text-gray-600">Track and manage business expenses</p>
+          </div>
+          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {Array.from({length: 3}).map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border p-6 space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="h-8 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-lg border p-6">
+          <div className="flex gap-4">
+            <div className="flex-1 h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-48 h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-48 h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg border p-6 space-y-4">
+          {Array.from({length: 5}).map((_, i) => (
+            <div key={i} className="flex justify-between items-center p-4 border rounded">
+              <div className="space-y-2">
+                <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right space-y-1">
+                  <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -183,13 +231,14 @@ export default function Expenses() {
           <h1 className="text-3xl font-bold">Expenses</h1>
           <p className="text-gray-600">Track and manage business expenses</p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Expense
-            </Button>
-          </DialogTrigger>
+        <PermissionGuard permission="addExpenses">
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Expense
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Expense</DialogTitle>
@@ -280,7 +329,8 @@ export default function Expenses() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </PermissionGuard>
       </div>
 
       {/* Summary Cards */}
@@ -389,19 +439,31 @@ export default function Expenses() {
                     </Badge>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(expense)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleDeleteExpense(expense._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <PermissionGuard permission="editExpenses">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(expense)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </PermissionGuard>
+                    <PermissionGuard permission="deleteExpenses">
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteExpense(expense._id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </PermissionGuard>
                   </div>
                 </div>
               </div>
             ))}
             {filteredExpenses.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No expenses found matching your criteria.
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <TrendingDown className="h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses found</h3>
+                <p className="text-gray-500 mb-4">Record your first expense to get started</p>
+                <PermissionGuard permission="addExpenses">
+                  <Button onClick={() => setShowCreateDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Expense
+                  </Button>
+                </PermissionGuard>
               </div>
             )}
           </div>

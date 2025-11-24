@@ -84,16 +84,6 @@ export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
           // roleField: "shipmentManagement"
         },
         {
-          title: "Stock Transfer",
-          url: `/dashboard/transport/stock-transfer`,
-          // roleField: "stockTransfer"
-        },
-        {
-          title: "Warehouse Management",
-          url: `/dashboard/transport/warehouse-management`,
-          // roleField: "warehouseManagement"
-        },
-        {
           title: "Delivery Tracking",
           url: `/dashboard/transport/delivery-tracking`,
           // roleField: "deliveryTracking"
@@ -301,17 +291,17 @@ export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
       items: [
         {
           title: "Departments",
-          url: `/dashboard/hr/department`,
+          url: `/dashboard/hr-payroll/department`,
           roleField: "manageHr"
         },
         {
           title: "Staffs",
-          url: `/dashboard/hr/staffs`,
+          url: `/dashboard/hr-payroll/staff`,
           roleField: "manageHr"
         },
         {
           title: "Roles",
-          url: `/dashboard/hr/manage-role`,
+          url: `/dashboard/hr-payroll/manage-role`,
           roleField: "manageHr"
         },
         {

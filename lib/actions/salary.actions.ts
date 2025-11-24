@@ -9,7 +9,51 @@ import { connectToDB } from '../mongoose';
 // Salary Structure Actions
 export async function getSalaryStructures() {
   await connectToDB();
-  return await SalaryStructure.find().sort({ createdAt: -1 });
+  
+  const structures = await SalaryStructure.find().sort({ createdAt: -1 });
+  
+  // Create sample data if none exists
+  if (structures.length === 0) {
+    const sampleStructures = [
+      {
+        title: 'Senior Developer',
+        department: 'Engineering',
+        position: 'Software Engineer',
+        basicSalary: 8000,
+        allowances: [
+          { name: 'Transport', amount: 500, type: 'fixed' },
+          { name: 'Medical', amount: 300, type: 'fixed' }
+        ],
+        deductions: [
+          { name: 'Tax', amount: 800, type: 'fixed' },
+          { name: 'Insurance', amount: 200, type: 'fixed' }
+        ],
+        totalSalary: 7800,
+        status: 'active'
+      },
+      {
+        title: 'Sales Manager',
+        department: 'Sales',
+        position: 'Manager',
+        basicSalary: 6000,
+        allowances: [
+          { name: 'Commission', amount: 1000, type: 'fixed' },
+          { name: 'Transport', amount: 400, type: 'fixed' }
+        ],
+        deductions: [
+          { name: 'Tax', amount: 600, type: 'fixed' },
+          { name: 'Insurance', amount: 150, type: 'fixed' }
+        ],
+        totalSalary: 6650,
+        status: 'active'
+      }
+    ];
+    
+    await SalaryStructure.insertMany(sampleStructures);
+    return await SalaryStructure.find().sort({ createdAt: -1 });
+  }
+  
+  return structures;
 }
 
 export async function createSalaryStructure(data: any) {
@@ -38,7 +82,56 @@ export async function deleteSalaryStructure(id: string) {
 // Employee Actions
 export async function getEmployees() {
   await connectToDB();
-  return await Employee.find().populate('salaryStructure').sort({ createdAt: -1 });
+  
+  const employees = await Employee.find().populate('salaryStructure').sort({ createdAt: -1 });
+  
+  // Create sample data if none exists
+  if (employees.length === 0) {
+    const structures = await SalaryStructure.find();
+    if (structures.length > 0) {
+      const sampleEmployees = [
+        {
+          employeeId: 'EMP001',
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john.doe@company.com',
+          phone: '+1234567890',
+          department: 'Engineering',
+          position: 'Software Engineer',
+          hireDate: new Date('2023-01-15'),
+          salaryStructure: structures[0]._id,
+          bankAccount: {
+            accountNumber: '1234567890',
+            bankName: 'First Bank',
+            accountHolder: 'John Doe'
+          },
+          status: 'active'
+        },
+        {
+          employeeId: 'EMP002',
+          firstName: 'Jane',
+          lastName: 'Smith',
+          email: 'jane.smith@company.com',
+          phone: '+1234567891',
+          department: 'Sales',
+          position: 'Manager',
+          hireDate: new Date('2023-03-01'),
+          salaryStructure: structures[1]._id,
+          bankAccount: {
+            accountNumber: '0987654321',
+            bankName: 'Second Bank',
+            accountHolder: 'Jane Smith'
+          },
+          status: 'active'
+        }
+      ];
+      
+      await Employee.insertMany(sampleEmployees);
+      return await Employee.find().populate('salaryStructure').sort({ createdAt: -1 });
+    }
+  }
+  
+  return employees;
 }
 
 export async function createEmployee(data: any) {

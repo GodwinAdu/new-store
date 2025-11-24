@@ -45,6 +45,8 @@ interface ReceivedItem {
   orderedQuantity: number;
   receivedQuantity: number;
   actualCost: number;
+  sellingPrice: number;
+  expiryDate: string;
   condition: 'good' | 'damaged' | 'missing';
   notes: string;
 }
@@ -81,6 +83,8 @@ export default function ReceiveOrders() {
         orderedQuantity: item.quantity,
         receivedQuantity: item.quantity,
         actualCost: item.unitCost,
+        sellingPrice: item.unitCost * 1.3, // Default 30% markup
+        expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year default
         condition: 'good' as const,
         notes: ''
       }))
@@ -117,7 +121,9 @@ export default function ReceiveOrders() {
         receivedItems.map(item => ({
           productId: item.productId,
           receivedQuantity: item.receivedQuantity,
-          actualCost: item.actualCost
+          actualCost: item.actualCost,
+          sellingPrice: item.sellingPrice,
+          expiryDate: new Date(item.expiryDate)
         }))
       );
 
@@ -263,7 +269,7 @@ export default function ReceiveOrders() {
                       const originalItem = selectedPurchase.items[index];
                       return (
                         <div key={index} className="p-4 border rounded-lg">
-                          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+                          <div className="grid grid-cols-1 md:grid-cols-8 gap-4 items-center">
                             <div className="md:col-span-2">
                               <div className="font-medium">{originalItem.product.name}</div>
                               <div className="text-sm text-gray-600">{originalItem.product.sku}</div>
@@ -287,7 +293,7 @@ export default function ReceiveOrders() {
                             </div>
                             
                             <div>
-                              <Label htmlFor={`cost-${index}`} className="text-xs">Actual Cost</Label>
+                              <Label htmlFor={`cost-${index}`} className="text-xs">Unit Cost</Label>
                               <Input
                                 id={`cost-${index}`}
                                 type="number"
@@ -295,6 +301,29 @@ export default function ReceiveOrders() {
                                 value={item.actualCost}
                                 onChange={(e) => updateReceivedItem(index, 'actualCost', parseFloat(e.target.value) || 0)}
                                 className="w-24"
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`selling-${index}`} className="text-xs">Selling Price</Label>
+                              <Input
+                                id={`selling-${index}`}
+                                type="number"
+                                step="0.01"
+                                value={item.sellingPrice}
+                                onChange={(e) => updateReceivedItem(index, 'sellingPrice', parseFloat(e.target.value) || 0)}
+                                className="w-24"
+                              />
+                            </div>
+                            
+                            <div>
+                              <Label htmlFor={`expiry-${index}`} className="text-xs">Expiry Date</Label>
+                              <Input
+                                id={`expiry-${index}`}
+                                type="date"
+                                value={item.expiryDate}
+                                onChange={(e) => updateReceivedItem(index, 'expiryDate', e.target.value)}
+                                className="w-32"
                               />
                             </div>
                             

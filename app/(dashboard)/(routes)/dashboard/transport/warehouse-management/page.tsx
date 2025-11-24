@@ -5,101 +5,130 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Warehouse, Package, MapPin, Users, BarChart3, Search, Eye } from 'lucide-react';
-import { getWarehouses, getWarehouseStock } from '@/lib/actions/stock-transfer.actions';
+import { Plus, Building, MapPin, User, Phone, Package, Edit, Trash2 } from 'lucide-react';
+import { getWarehouses, createWarehouse, getShipments, receiveShipment } from '@/lib/actions/transport.actions';
 
 interface Warehouse {
   _id: string;
   name: string;
   location: string;
-  type: string;
+  address: string;
+  manager: string;
+  phone: string;
   capacity: number;
-  isActive: boolean;
+  status: string;
 }
 
-interface WarehouseStock {
-  product: {
-    _id: string;
-    name: string;
-    sku: string;
-    price: number;
-  };
-  totalQuantity: number;
-  batches: Array<{
+interface Shipment {
+  _id: string;
+  trackingNumber: string;
+  supplier: string;
+  status: string;
+  items: Array<{
+    product: { name: string; sku: string };
     quantity: number;
-    costPerUnit: number;
-    batchNumber: string;
-    expiryDate: string;
+    receivedQuantity: number;
   }>;
+  totalValue: number;
 }
 
 export default function WarehouseManagement() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
-  const [warehouseStock, setWarehouseStock] = useState<WarehouseStock[]>([]);
+  const [pendingShipments, setPendingShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stockLoading, setStockLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showReceiveDialog, setShowReceiveDialog] = useState(false);
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const [newWarehouse, setNewWarehouse] = useState({
+    name: '',
+    location: '',
+    address: '',
+    manager: '',
+    phone: '',
+    capacity: 0
+  });
 
   useEffect(() => {
-    loadWarehouses();
+    loadData();
   }, []);
 
-  const loadWarehouses = async () => {
+  const loadData = async () => {
     try {
-      const data = await getWarehouses();
-      setWarehouses(data);
+      const [warehousesData, shipmentsData] = await Promise.all([
+        getWarehouses(),
+        getShipments()
+      ]);
+      setWarehouses(warehousesData);
+      setPendingShipments(shipmentsData.filter((s: Shipment) => s.status === 'delivered'));
     } catch (error) {
-      console.error('Failed to load warehouses:', error);
+      console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadWarehouseStock = async (warehouseId: string) => {
-    setStockLoading(true);
+  const handleCreateWarehouse = async () => {
     try {
-      const stock = await getWarehouseStock(warehouseId);
-      setWarehouseStock(stock);
+      await createWarehouse(newWarehouse);
+      setShowCreateDialog(false);
+      setNewWarehouse({
+        name: '',
+        location: '',
+        address: '',
+        manager: '',
+        phone: '',
+        capacity: 0
+      });
+      loadData();
     } catch (error) {
-      console.error('Failed to load warehouse stock:', error);
-    } finally {
-      setStockLoading(false);
+      console.error('Failed to create warehouse:', error);
     }
   };
 
-  const handleViewWarehouse = (warehouse: Warehouse) => {
-    setSelectedWarehouse(warehouse);
-    loadWarehouseStock(warehouse._id);
-  };
-
-  const getWarehouseTypeColor = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case 'main': return 'bg-blue-100 text-blue-800';
-      case 'distribution': return 'bg-green-100 text-green-800';
-      case 'storage': return 'bg-purple-100 text-purple-800';
-      case 'retail': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const handleReceiveShipment = async () => {
+    if (!selectedShipment) return;
+    
+    try {
+      const receivedItems = selectedShipment.items.map(item => ({
+        productId: item.product.sku,
+        receivedQuantity: item.quantity
+      }));
+      
+      await receiveShipment(selectedShipment._id, receivedItems);
+      setShowReceiveDialog(false);
+      setSelectedShipment(null);
+      loadData();
+    } catch (error) {
+      console.error('Failed to receive shipment:', error);
     }
   };
-
-  const calculateWarehouseUtilization = (warehouse: Warehouse) => {
-    const totalStock = warehouseStock.reduce((sum, item) => sum + item.totalQuantity, 0);
-    const utilization = warehouse.capacity > 0 ? (totalStock / warehouse.capacity) * 100 : 0;
-    return Math.min(utilization, 100);
-  };
-
-  const filteredStock = warehouseStock.filter(item =>
-    item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.product.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Warehouse Management</h1>
+            <p className="text-gray-600">Manage warehouses and receive shipments</p>
+          </div>
+          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({length: 6}).map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-5 w-5 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="space-y-3">
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -109,200 +138,212 @@ export default function WarehouseManagement() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Warehouse Management</h1>
-          <p className="text-gray-600">Monitor warehouse operations and inventory levels</p>
+          <p className="text-gray-600">Manage warehouses and receive shipments</p>
         </div>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Warehouse
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Warehouse</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Name</label>
+                  <Input
+                    value={newWarehouse.name}
+                    onChange={(e) => setNewWarehouse({...newWarehouse, name: e.target.value})}
+                    placeholder="Main Warehouse"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Location</label>
+                  <Input
+                    value={newWarehouse.location}
+                    onChange={(e) => setNewWarehouse({...newWarehouse, location: e.target.value})}
+                    placeholder="Downtown"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Address</label>
+                <Input
+                  value={newWarehouse.address}
+                  onChange={(e) => setNewWarehouse({...newWarehouse, address: e.target.value})}
+                  placeholder="123 Main St, City"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Manager</label>
+                  <Input
+                    value={newWarehouse.manager}
+                    onChange={(e) => setNewWarehouse({...newWarehouse, manager: e.target.value})}
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Phone</label>
+                  <Input
+                    value={newWarehouse.phone}
+                    onChange={(e) => setNewWarehouse({...newWarehouse, phone: e.target.value})}
+                    placeholder="+1234567890"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Capacity (sq ft)</label>
+                <Input
+                  type="number"
+                  value={newWarehouse.capacity}
+                  onChange={(e) => setNewWarehouse({...newWarehouse, capacity: Number(e.target.value)})}
+                  placeholder="10000"
+                />
+              </div>
+              <Button onClick={handleCreateWarehouse} className="w-full">
+                Create Warehouse
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Warehouse Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {warehouses.map((warehouse) => (
-          <Card key={warehouse._id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-lg font-medium">{warehouse.name}</CardTitle>
-              <Warehouse className="h-5 w-5 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm">{warehouse.location}</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Type:</span>
-                  <Badge className={getWarehouseTypeColor(warehouse.type)}>
-                    {warehouse.type || 'General'}
-                  </Badge>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Capacity:</span>
-                  <span className="text-sm font-medium">{warehouse.capacity.toLocaleString()} units</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Status:</span>
-                  <Badge className={warehouse.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                    {warehouse.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
-                </div>
-                
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      className="w-full mt-4"
-                      onClick={() => handleViewWarehouse(warehouse)}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      View Details
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-4xl">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <Warehouse className="h-5 w-5" />
-                        {selectedWarehouse?.name} - Inventory Details
-                      </DialogTitle>
-                    </DialogHeader>
-                    
-                    {selectedWarehouse && (
-                      <div className="space-y-6">
-                        {/* Warehouse Info */}
-                        <div className="grid grid-cols-3 gap-4">
-                          <Card>
-                            <CardContent className="pt-6">
-                              <div className="flex items-center gap-2">
-                                <Package className="h-5 w-5 text-blue-600" />
-                                <div>
-                                  <div className="text-2xl font-bold">{warehouseStock.length}</div>
-                                  <div className="text-sm text-gray-600">Product Types</div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                          
-                          <Card>
-                            <CardContent className="pt-6">
-                              <div className="flex items-center gap-2">
-                                <BarChart3 className="h-5 w-5 text-green-600" />
-                                <div>
-                                  <div className="text-2xl font-bold">
-                                    {warehouseStock.reduce((sum, item) => sum + item.totalQuantity, 0).toLocaleString()}
-                                  </div>
-                                  <div className="text-sm text-gray-600">Total Units</div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                          
-                          <Card>
-                            <CardContent className="pt-6">
-                              <div className="flex items-center gap-2">
-                                <Users className="h-5 w-5 text-purple-600" />
-                                <div>
-                                  <div className="text-2xl font-bold">
-                                    {calculateWarehouseUtilization(selectedWarehouse).toFixed(1)}%
-                                  </div>
-                                  <div className="text-sm text-gray-600">Utilization</div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </div>
-                        
-                        {/* Stock Search */}
-                        <div className="flex gap-4">
-                          <div className="flex-1">
-                            <div className="relative">
-                              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                              <Input
-                                placeholder="Search products in warehouse..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Stock List */}
-                        <div className="max-h-96 overflow-y-auto">
-                          {stockLoading ? (
-                            <div className="flex items-center justify-center h-32">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              {filteredStock.map((item) => (
-                                <div key={item.product._id} className="flex items-center justify-between p-3 border rounded-lg">
-                                  <div>
-                                    <div className="font-medium">{item.product.name}</div>
-                                    <div className="text-sm text-gray-600">SKU: {item.product.sku}</div>
-                                    <div className="text-sm text-gray-500">
-                                      {item.batches.length} batch{item.batches.length !== 1 ? 'es' : ''}
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-lg font-bold">{item.totalQuantity}</div>
-                                    <div className="text-sm text-gray-600">units</div>
-                                    <div className="text-sm text-green-600">
-                                      ${(item.totalQuantity * item.product.price).toFixed(2)}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                              
-                              {filteredStock.length === 0 && !stockLoading && (
-                                <div className="text-center py-8 text-gray-500">
-                                  {searchTerm ? 'No products match your search' : 'No inventory in this warehouse'}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+      {pendingShipments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Pending Receipts ({pendingShipments.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {pendingShipments.map((shipment) => (
+                <Card key={shipment._id} className="cursor-pointer hover:bg-gray-50" 
+                      onClick={() => {
+                        setSelectedShipment(shipment);
+                        setShowReceiveDialog(true);
+                      }}>
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{shipment.trackingNumber}</span>
+                        <Badge className="bg-orange-100 text-orange-800">Delivered</Badge>
                       </div>
-                    )}
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                      <p className="text-sm text-gray-600">From: {shipment.supplier}</p>
+                      <p className="text-sm text-gray-600">Items: {shipment.items.length}</p>
+                      <p className="text-sm font-medium">${shipment.totalValue.toLocaleString()}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {warehouses.length === 0 ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+            <Building className="h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No warehouses found</h3>
+            <p className="text-gray-500 mb-4">Create your first warehouse to get started</p>
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Warehouse
+            </Button>
+          </div>
+        ) : (
+          warehouses.map((warehouse) => (
+            <Card key={warehouse._id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-medium">{warehouse.name}</CardTitle>
+                <Building className="h-5 w-5 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm">{warehouse.location}</span>
+                  </div>
+                  <div className="text-sm text-gray-600">{warehouse.address}</div>
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm">{warehouse.manager}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm">{warehouse.phone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Capacity:</span>
+                    <span className="text-sm font-medium">{warehouse.capacity.toLocaleString()} sq ft</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Status:</span>
+                    <Badge className={warehouse.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                      {warehouse.status}
+                    </Badge>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
 
-      {/* Warehouse Statistics */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Warehouse Network Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">{warehouses.length}</div>
-              <div className="text-sm text-gray-600">Total Warehouses</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {warehouses.filter(w => w.isActive).length}
+      <Dialog open={showReceiveDialog} onOpenChange={setShowReceiveDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Receive Shipment - {selectedShipment?.trackingNumber}</DialogTitle>
+          </DialogHeader>
+          {selectedShipment && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Supplier:</p>
+                  <p className="font-medium">{selectedShipment.supplier}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Total Value:</p>
+                  <p className="font-medium">${selectedShipment.totalValue.toLocaleString()}</p>
+                </div>
               </div>
-              <div className="text-sm text-gray-600">Active Warehouses</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {warehouses.reduce((sum, w) => sum + w.capacity, 0).toLocaleString()}
+              
+              <div>
+                <h4 className="font-medium mb-2">Items to Receive:</h4>
+                <div className="space-y-2">
+                  {selectedShipment.items.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                      <div>
+                        <p className="font-medium">{item.product.name}</p>
+                        <p className="text-sm text-gray-600">SKU: {item.product.sku}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">Qty: {item.quantity}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="text-sm text-gray-600">Total Capacity</div>
-            </div>
-            <div className="text-center p-4 border rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">
-                {new Set(warehouses.map(w => w.type)).size}
+
+              <div className="flex gap-2">
+                <Button onClick={handleReceiveShipment} className="flex-1">
+                  Confirm Receipt
+                </Button>
+                <Button variant="outline" onClick={() => setShowReceiveDialog(false)}>
+                  Cancel
+                </Button>
               </div>
-              <div className="text-sm text-gray-600">Warehouse Types</div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

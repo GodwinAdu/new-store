@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Truck, Plus, Calendar, User, Fuel, Gauge, Settings, Edit, Trash2, Wrench, Search, Eye } from 'lucide-react';
-import { getVehicles, createVehicle, updateVehicle, deleteVehicle, scheduleMaintenanceVehicle, getVehicleMaintenanceSchedule } from '@/lib/actions/transport.actions';
+import { Truck, Plus, Calendar, User, Fuel, Gauge, Edit, Trash2, Wrench, Search } from 'lucide-react';
+import { getVehicles, createVehicle, updateVehicle, deleteVehicle } from '@/lib/actions/transport.actions';
 
 interface Vehicle {
   _id: string;
@@ -27,13 +27,16 @@ interface Vehicle {
 export default function VehicleManagement() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([]);
-  const [maintenanceSchedule, setMaintenanceSchedule] = useState<Vehicle[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [deleting, setDeleting] = useState(false);
 
   const [newVehicle, setNewVehicle] = useState({
     plateNumber: '',
@@ -64,12 +67,8 @@ export default function VehicleManagement() {
 
   const loadData = async () => {
     try {
-      const [vehiclesData, maintenanceData] = await Promise.all([
-        getVehicles(),
-        getVehicleMaintenanceSchedule()
-      ]);
+      const vehiclesData = await getVehicles();
       setVehicles(vehiclesData);
-      setMaintenanceSchedule(maintenanceData);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -118,25 +117,28 @@ export default function VehicleManagement() {
     }
   };
 
-  const handleDeleteVehicle = async (vehicleId: string) => {
-    if (confirm('Are you sure you want to delete this vehicle?')) {
-      try {
-        await deleteVehicle(vehicleId);
-        loadData();
-      } catch (error) {
-        console.error('Failed to delete vehicle:', error);
-      }
+  const handleDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
+    
+    setDeleting(true);
+    try {
+      await deleteVehicle(vehicleToDelete._id);
+      setShowDeleteDialog(false);
+      setVehicleToDelete(null);
+      loadData();
+    } catch (error) {
+      console.error('Failed to delete vehicle:', error);
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handleScheduleMaintenance = async (vehicleId: string) => {
-    try {
-      await scheduleMaintenanceVehicle(vehicleId, new Date());
-      loadData();
-    } catch (error) {
-      console.error('Failed to schedule maintenance:', error);
-    }
+  const openDeleteDialog = (vehicle: Vehicle) => {
+    setVehicleToDelete(vehicle);
+    setShowDeleteDialog(true);
   };
+
+
 
   const openEditDialog = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
@@ -313,7 +315,13 @@ export default function VehicleManagement() {
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-orange-600" />
               <div>
-                <div className="text-2xl font-bold">{maintenanceSchedule.length}</div>
+                <div className="text-2xl font-bold">
+                  {vehicles.filter(v => {
+                    if (!v.nextMaintenance) return false;
+                    const daysUntil = Math.ceil((new Date(v.nextMaintenance).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    return daysUntil <= 30 && daysUntil > 0;
+                  }).length}
+                </div>
                 <div className="text-sm text-gray-600">Due Soon</div>
               </div>
             </div>
@@ -353,80 +361,100 @@ export default function VehicleManagement() {
       </Card>
 
       {/* Vehicles Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredVehicles.map((vehicle) => {
-          const maintenanceStatus = getMaintenanceStatus(vehicle);
-          return (
-            <Card key={vehicle._id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg font-medium">{vehicle.plateNumber}</CardTitle>
-                <Truck className="h-5 w-5 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Type:</span>
-                    <span className="text-sm font-medium">{vehicle.type}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Capacity:</span>
-                    <span className="text-sm font-medium">{vehicle.capacity}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Status:</span>
-                    <Badge className={getStatusColor(vehicle.status)}>
-                      {vehicle.status}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm">{vehicle.driver}</span>
-                  </div>
-                  {vehicle.fuelType && (
-                    <div className="flex items-center gap-2">
-                      <Fuel className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">{vehicle.fuelType}</span>
+      {filteredVehicles.length === 0 ? (
+        <Card>
+          <CardContent className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <Truck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {vehicles.length === 0 ? 'No Vehicles Found' : 'No Vehicles Match Your Filters'}
+              </h3>
+              <p className="text-gray-600 mb-4">
+                {vehicles.length === 0 
+                  ? 'Get started by adding your first vehicle to the fleet'
+                  : 'Try adjusting your search or filter criteria'
+                }
+              </p>
+              {vehicles.length === 0 && (
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Your First Vehicle
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredVehicles.map((vehicle) => {
+            const maintenanceStatus = getMaintenanceStatus(vehicle);
+            return (
+              <Card key={vehicle._id} className="hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-lg font-medium">{vehicle.plateNumber}</CardTitle>
+                  <Truck className="h-5 w-5 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Type:</span>
+                      <span className="text-sm font-medium">{vehicle.type}</span>
                     </div>
-                  )}
-                  {vehicle.mileage && (
-                    <div className="flex items-center gap-2">
-                      <Gauge className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">{vehicle.mileage.toLocaleString()} km</span>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Capacity:</span>
+                      <span className="text-sm font-medium">{vehicle.capacity}</span>
                     </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm">Last: {new Date(vehicle.lastMaintenance).toLocaleDateString()}</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Status:</span>
+                      <Badge className={getStatusColor(vehicle.status)}>
+                        {vehicle.status}
+                      </Badge>
                     </div>
-                    {maintenanceStatus && (
-                      <span className={`text-sm font-medium ${maintenanceStatus.color}`}>
-                        {maintenanceStatus.text}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm">{vehicle.driver}</span>
+                    </div>
+                    {vehicle.fuelType && (
+                      <div className="flex items-center gap-2">
+                        <Fuel className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">{vehicle.fuelType}</span>
+                      </div>
                     )}
-                  </div>
-                  
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(vehicle)}>
-                      <Edit className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                    {vehicle.status === 'available' && (
-                      <Button variant="outline" size="sm" onClick={() => handleScheduleMaintenance(vehicle._id)}>
-                        <Wrench className="h-4 w-4 mr-1" />
-                        Maintain
+                    {vehicle.mileage && (
+                      <div className="flex items-center gap-2">
+                        <Gauge className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">{vehicle.mileage.toLocaleString()} km</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm">Last: {new Date(vehicle.lastMaintenance).toLocaleDateString()}</span>
+                      </div>
+                      {maintenanceStatus && (
+                        <span className={`text-sm font-medium ${maintenanceStatus.color}`}>
+                          {maintenanceStatus.text}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2 pt-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(vehicle)}>
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
                       </Button>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => handleDeleteVehicle(vehicle._id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+
+                      <Button variant="outline" size="sm" onClick={() => openDeleteDialog(vehicle)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
@@ -508,6 +536,49 @@ export default function VehicleManagement() {
             <Button onClick={handleEditVehicle} className="w-full">
               Update Vehicle
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Vehicle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete vehicle <strong>{vehicleToDelete?.plateNumber}</strong>? 
+              This action cannot be undone.
+            </p>
+            {vehicleToDelete?.status === 'in-transit' && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ Warning: This vehicle is currently in transit. Deleting it may affect ongoing shipments.
+                </p>
+              </div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={handleDeleteVehicle}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Delete Vehicle
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

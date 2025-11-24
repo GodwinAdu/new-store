@@ -69,8 +69,8 @@ export default function ShipmentManagement() {
     if (searchTerm) {
       filtered = filtered.filter(shipment =>
         shipment.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        shipment.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        shipment.destination.toLowerCase().includes(searchTerm.toLowerCase())
+        shipment.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        shipment.destinationWarehouse?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -83,12 +83,15 @@ export default function ShipmentManagement() {
 
   const handleCreateShipment = async () => {
     try {
+      // Create a manual shipment (not linked to purchase order)
       await createShipment({
-        origin: newShipment.origin,
-        destination: newShipment.destination,
+        purchaseOrderId: '', // Empty for manual shipments
+        supplier: newShipment.origin,
+        destinationWarehouseId: '', // Would need warehouse selection
         estimatedDelivery: new Date(newShipment.estimatedDelivery),
         items: [],
-        driver: newShipment.driver
+        driver: newShipment.driver,
+        vehicleId: '' // Would need vehicle selection
       });
       setShowCreateDialog(false);
       setNewShipment({ origin: '', destination: '', estimatedDelivery: '', driver: '' });
@@ -216,7 +219,9 @@ export default function ShipmentManagement() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm">{shipment.origin} → {shipment.destination}</span>
+                  <span className="text-sm">
+                    {shipment.supplier} → {shipment.destinationWarehouse?.name || 'Warehouse'}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Status:</span>
@@ -255,7 +260,7 @@ export default function ShipmentManagement() {
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <h4 className="font-medium">Route</h4>
-                              <p>{selectedShipment.origin} → {selectedShipment.destination}</p>
+                              <p>{selectedShipment.supplier} → {selectedShipment.destinationWarehouse?.name || 'Warehouse'}</p>
                             </div>
                             <div>
                               <h4 className="font-medium">Status</h4>

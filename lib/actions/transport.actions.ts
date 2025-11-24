@@ -2,103 +2,64 @@
 
 import Vehicle from '@/lib/models/vehicle.models';
 import Shipment from '@/lib/models/shipment.models';
-import Warehouse from '@/lib/models/warehouse.models';
+import { Warehouse } from '@/lib/models/Warehouse';
 import { connectToDB } from '../mongoose';
+import Product from '@/lib/models/product.models';
+import Purchase from '@/lib/models/purchase.models';
 
 export async function getVehicles() {
   try {
     await connectToDB();
-    
-    const vehicles = await Vehicle.find().sort({ createdAt: -1 });
-    
+
+   const vehicles = await Vehicle.find().sort({ createdAt: -1 });
+
     // If no vehicles exist, create sample data
     if (vehicles.length === 0) {
-      const sampleVehicles = [
-        {
-          plateNumber: 'ABC-123',
-          type: 'Truck',
-          capacity: '5 tons',
-          status: 'available',
-          driver: 'John Doe',
-          lastMaintenance: new Date('2024-01-15'),
-          nextMaintenance: new Date('2024-04-15'),
-          fuelType: 'Diesel',
-          mileage: 45000
-        },
-        {
-          plateNumber: 'XYZ-789',
-          type: 'Van',
-          capacity: '2 tons',
-          status: 'in-transit',
-          driver: 'Jane Smith',
-          lastMaintenance: new Date('2024-02-01'),
-          nextMaintenance: new Date('2024-05-01'),
-          fuelType: 'Gasoline',
-          mileage: 32000
-        },
-        {
-          plateNumber: 'DEF-456',
-          type: 'Motorcycle',
-          capacity: '50 kg',
-          status: 'maintenance',
-          driver: 'Mike Johnson',
-          lastMaintenance: new Date('2024-12-01'),
-          nextMaintenance: new Date('2025-03-01'),
-          fuelType: 'Gasoline',
-          mileage: 15000
-        }
-      ];
-      
-      await Vehicle.insertMany(sampleVehicles);
-      return await Vehicle.find().sort({ createdAt: -1 });
+      return []
     }
-    
+
+    console.log(vehicles, "vehicles log")
+
     return JSON.parse(JSON.stringify(vehicles));
   } catch (error) {
-    throw new Error('Failed to fetch vehicles');
+    console.error('Error fetching vehicles:', error);
+    return [];
   }
 }
 
 export async function getShipments() {
   try {
     await connectToDB();
-    
+
     const shipments = await Shipment.find()
-      .populate('items.product', 'name sku')
-      .populate('vehicle', 'plateNumber type')
+      .populate([
+        { path: 'items.product', model: Product, select: 'name sku' },
+        { path: 'vehicle', model: Vehicle, select: 'plateNumber type' },
+        { path: 'purchaseOrder', model: Purchase, select: 'orderNumber' },
+        { path: 'destinationWarehouse', model: Warehouse, select: 'name location' },
+      ])
       .sort({ createdAt: -1 });
-    
-    // If no shipments exist, create sample data
-    if (shipments.length === 0) {
-      const sampleShipments = [
-        {
-          trackingNumber: 'SH001',
-          origin: 'Warehouse A',
-          destination: 'Customer Location',
-          status: 'in-transit',
-          estimatedDelivery: new Date('2024-12-25'),
-          items: [],
-          driver: 'John Doe'
-        },
-        {
-          trackingNumber: 'SH002',
-          origin: 'Warehouse B',
-          destination: 'Store Location',
-          status: 'delivered',
-          estimatedDelivery: new Date('2024-12-20'),
-          actualDelivery: new Date('2024-12-19'),
-          items: [],
-          driver: 'Jane Smith'
-        }
-      ];
-      
-      await Shipment.insertMany(sampleShipments);
-      return await Shipment.find().populate('items.product', 'name sku').populate('vehicle', 'plateNumber type').sort({ createdAt: -1 });
-    }
-    
+
     return JSON.parse(JSON.stringify(shipments));
   } catch (error) {
     throw new Error('Failed to fetch shipments');
+  }
+}
+
+export async function getWarehouses() {
+  try {
+    await connectToDB();
+
+    const warehouses = await Warehouse.find().sort({ createdAt: -1 });
+
+    // If no warehouses exist, create sample data
+    if (warehouses.length === 0) {
+      return []
+    }
+
+    return JSON.parse(JSON.stringify(warehouses));
+  } catch (error) {
+    throw new Error('Failed to fetch warehouses');
   }
 }
 
@@ -112,172 +73,262 @@ export async function createVehicle(vehicleData: {
 }) {
   try {
     await connectToDB();
-    
+
     const vehicle = await Vehicle.create({
       ...vehicleData,
       lastMaintenance: new Date(),
-      nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days
+      nextMaintenance: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       status: 'available'
     });
-    
+
     return JSON.parse(JSON.stringify(vehicle));
   } catch (error) {
     throw new Error('Failed to create vehicle');
   }
 }
 
-export async function updateVehicle(vehicleId: string, updateData: {
-  plateNumber?: string;
-  type?: string;
-  capacity?: string;
-  driver?: string;
-  status?: string;
-  fuelType?: string;
-  mileage?: number;
+export async function createWarehouse(warehouseData: {
+  name: string;
+  location: string;
+  address: string;
+  manager: string;
+  phone: string;
+  capacity: number;
 }) {
   try {
     await connectToDB();
-    
-    const vehicle = await Vehicle.findByIdAndUpdate(vehicleId, updateData, { new: true });
-    
-    if (!vehicle) {
-      throw new Error('Vehicle not found');
-    }
-    
-    return JSON.parse(JSON.stringify(vehicle));
-  } catch (error) {
-    throw new Error('Failed to update vehicle');
-  }
-}
 
-export async function deleteVehicle(vehicleId: string) {
-  try {
-    await connectToDB();
-    
-    const vehicle = await Vehicle.findByIdAndDelete(vehicleId);
-    
-    if (!vehicle) {
-      throw new Error('Vehicle not found');
-    }
-    
-    return { success: true };
-  } catch (error) {
-    throw new Error('Failed to delete vehicle');
-  }
-}
+    const warehouse = await Warehouse.create(warehouseData);
 
-export async function scheduleMaintenanceVehicle(vehicleId: string, maintenanceDate: Date) {
-  try {
-    await connectToDB();
-    
-    const vehicle = await Vehicle.findByIdAndUpdate(
-      vehicleId,
-      {
-        status: 'maintenance',
-        lastMaintenance: maintenanceDate,
-        nextMaintenance: new Date(maintenanceDate.getTime() + 90 * 24 * 60 * 60 * 1000)
-      },
-      { new: true }
-    );
-    
-    if (!vehicle) {
-      throw new Error('Vehicle not found');
-    }
-    
-    return JSON.parse(JSON.stringify(vehicle));
+    return JSON.parse(JSON.stringify(warehouse));
   } catch (error) {
-    throw new Error('Failed to schedule maintenance');
-  }
-}
-
-export async function getVehiclesByStatus(status: string) {
-  try {
-    await connectToDB();
-    
-    const vehicles = await Vehicle.find({ status }).sort({ createdAt: -1 });
-    
-    return JSON.parse(JSON.stringify(vehicles));
-  } catch (error) {
-    throw new Error('Failed to fetch vehicles by status');
-  }
-}
-
-export async function getVehicleMaintenanceSchedule() {
-  try {
-    await connectToDB();
-    
-    const upcomingMaintenance = await Vehicle.find({
-      nextMaintenance: {
-        $lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Next 30 days
-      }
-    }).sort({ nextMaintenance: 1 });
-    
-    return JSON.parse(JSON.stringify(upcomingMaintenance));
-  } catch (error) {
-    throw new Error('Failed to fetch maintenance schedule');
+    throw new Error('Failed to create warehouse');
   }
 }
 
 export async function createShipment(shipmentData: {
-  origin: string;
-  destination: string;
+  purchaseOrderId: string;
+  supplier: string;
+  destinationWarehouseId: string;
   estimatedDelivery: Date;
-  items: Array<{ productId: string; quantity: number }>;
-  driver?: string;
-  purchaseOrderId?: string;
-  stockTransferId?: string;
+  items: Array<{ productId: string; quantity: number; unitPrice: number }>;
+  driver: string;
+  vehicleId: string;
 }) {
   try {
+    console.log('createShipment called with data:', shipmentData);
     await connectToDB();
-    
+
     const trackingNumber = `SH${Date.now().toString().slice(-6)}`;
-    
-    const shipment = await Shipment.create({
+    const totalValue = shipmentData.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+
+    console.log('Generated tracking number:', trackingNumber);
+    console.log('Total value:', totalValue);
+
+    // Update vehicle status to in-transit
+    if (shipmentData.vehicleId) {
+      console.log('Updating vehicle status for:', shipmentData.vehicleId);
+      await Vehicle.findByIdAndUpdate(shipmentData.vehicleId, {
+        status: 'in-transit'
+      });
+    }
+
+    const shipmentPayload = {
       trackingNumber,
-      origin: shipmentData.origin,
-      destination: shipmentData.destination,
+      purchaseOrder: shipmentData.purchaseOrderId,
+      supplier: shipmentData.supplier,
+      destinationWarehouse: shipmentData.destinationWarehouseId,
       estimatedDelivery: shipmentData.estimatedDelivery,
       items: shipmentData.items.map(item => ({
         product: item.productId,
-        quantity: item.quantity
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        receivedQuantity: 0
       })),
+      totalValue,
       driver: shipmentData.driver,
+      vehicle: shipmentData.vehicleId,
       status: 'pending'
-    });
-    
+    };
+
+    console.log('Creating shipment with payload:', shipmentPayload);
+
+    const shipment = await Shipment.create(shipmentPayload);
+
+    console.log('Shipment created successfully:', shipment._id);
+
     return JSON.parse(JSON.stringify(shipment));
   } catch (error) {
-    throw new Error('Failed to create shipment');
+    console.error('Error in createShipment:', error);
+    throw new Error(`Failed to create shipment: ${error}`);
   }
 }
 
 export async function updateShipmentStatus(shipmentId: string, status: string, actualDelivery?: Date) {
   try {
     await connectToDB();
-    
+
     const updateData: any = { status };
     if (actualDelivery) {
       updateData.actualDelivery = actualDelivery;
     }
-    
+
     const shipment = await Shipment.findByIdAndUpdate(shipmentId, updateData, { new: true });
     
+    // Update vehicle status based on shipment status
+    if (shipment && shipment.vehicle) {
+      let vehicleStatus = 'available';
+      
+      if (status === 'in-transit') {
+        vehicleStatus = 'in-transit';
+      } else if (status === 'delivered' || status === 'received') {
+        vehicleStatus = 'available';
+      }
+      
+      await Vehicle.findByIdAndUpdate(shipment.vehicle, {
+        status: vehicleStatus
+      });
+    }
+
     return JSON.parse(JSON.stringify(shipment));
   } catch (error) {
     throw new Error('Failed to update shipment status');
   }
 }
 
-export async function getShipmentsByStatus(status: string) {
+export async function receiveShipment(shipmentId: string, receivedItems: Array<{ 
+  productId: string; 
+  receivedQuantity: number;
+  sellingPrice?: number;
+  expiryDate?: Date;
+}>) {
   try {
     await connectToDB();
-    
-    const shipments = await Shipment.find({ status })
-      .populate('items.product', 'name sku')
-      .sort({ createdAt: -1 });
-    
-    return JSON.parse(JSON.stringify(shipments));
+
+    const shipment = await Shipment.findById(shipmentId).populate([{path:'purchaseOrder',model:Purchase}]);
+    if (!shipment) throw new Error('Shipment not found');
+
+    // Create product batches for received items at destination warehouse
+    const ProductBatch = (await import('@/lib/models/product_batch.models')).default;
+    for (const receivedItem of receivedItems) {
+      const originalItem = shipment.items.find(item => 
+        item.product.toString() === receivedItem.productId
+      );
+      
+      if (originalItem) {
+        await ProductBatch.create({
+          product: receivedItem.productId,
+          warehouseId: shipment.destinationWarehouse, // Store in destination warehouse
+          quantity: receivedItem.receivedQuantity,
+          remaining: receivedItem.receivedQuantity,
+          unitCost: originalItem.unitPrice,
+          sellingPrice: receivedItem.sellingPrice || originalItem.unitPrice * 1.3, // User-defined or 30% markup
+          expiryDate: receivedItem.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // User-defined or 1 year default
+          isDepleted: false
+        });
+      }
+    }
+
+    // Update product inventory
+    const Product = (await import('@/lib/models/product.models')).default;
+    for (const receivedItem of receivedItems) {
+      await Product.findByIdAndUpdate(receivedItem.productId, {
+        $inc: { stock: receivedItem.receivedQuantity }
+      });
+    }
+
+    // Update related purchase order status
+    if (shipment.purchaseOrder) {
+      const Purchase = (await import('@/lib/models/purchase.models')).default;
+      await Purchase.findByIdAndUpdate(shipment.purchaseOrder, {
+        status: 'received',
+        receivedDate: new Date()
+      });
+    }
+
+    // Make vehicle available
+    if (shipment.vehicle) {
+      await Vehicle.findByIdAndUpdate(shipment.vehicle, {
+        status: 'available'
+      });
+    }
+
+    // Delete the shipment after successful receipt
+    await Shipment.findByIdAndDelete(shipmentId);
+
+    return { success: true, message: 'Shipment received and processed successfully' };
   } catch (error) {
-    throw new Error('Failed to fetch shipments by status');
+    console.error('Error in receiveShipment:', error);
+    throw new Error(`Failed to receive shipment: ${error}`);
+  }
+}
+
+export async function deleteVehicle(vehicleId: string) {
+  try {
+    await connectToDB();
+
+    const vehicle = await Vehicle.findByIdAndDelete(vehicleId);
+
+    if (!vehicle) {
+      throw new Error('Vehicle not found');
+    }
+
+    return { success: true };
+  } catch (error) {
+    throw new Error('Failed to delete vehicle');
+  }
+}
+
+export async function updateVehicle(vehicleId: string, updateData: any) {
+  try {
+    await connectToDB();
+
+    const vehicle = await Vehicle.findByIdAndUpdate(vehicleId, updateData, { new: true });
+
+    if (!vehicle) {
+      throw new Error('Vehicle not found');
+    }
+
+    return JSON.parse(JSON.stringify(vehicle));
+  } catch (error) {
+    throw new Error('Failed to update vehicle');
+  }
+}
+
+export async function getTransportStats() {
+  try {
+    await connectToDB();
+
+    const [vehicles, shipments, warehouses] = await Promise.all([
+      Vehicle.find(),
+      Shipment.find(),
+      Warehouse.find()
+    ]);
+
+    const vehicleStats = {
+      total: vehicles.length,
+      available: vehicles.filter(v => v.status === 'available').length,
+      inTransit: vehicles.filter(v => v.status === 'in-transit').length,
+      maintenance: vehicles.filter(v => v.status === 'maintenance').length
+    };
+
+    const shipmentStats = {
+      total: shipments.length,
+      pending: shipments.filter(s => s.status === 'pending').length,
+      inTransit: shipments.filter(s => s.status === 'in-transit').length,
+      delivered: shipments.filter(s => s.status === 'delivered').length,
+      overdue: shipments.filter(s => {
+        const eta = new Date(s.estimatedDelivery);
+        return new Date() > eta && s.status !== 'delivered';
+      }).length
+    };
+
+    return {
+      vehicles: vehicleStats,
+      shipments: shipmentStats,
+      warehouses: warehouses.length
+    };
+  } catch (error) {
+    throw new Error('Failed to fetch transport statistics');
   }
 }

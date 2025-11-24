@@ -5,6 +5,7 @@ import { UnitModal } from './_components/UnitModal'
 import { DataTable } from '@/components/table/data-table'
 import { columns } from './_components/column'
 import { fetchAllUnits } from '@/lib/actions/unit.actions'
+import { SeedBaseUnitsButton } from './_components/SeedBaseUnitsButton'
 
 
 const page = async () => {
@@ -15,6 +16,7 @@ const page = async () => {
       <div className="flex justify-between items-center px-3">
         <Heading title="Manage Units" />
         <div className="flex gap-4">
+          <SeedBaseUnitsButton />
           <UnitModal />
         </div>
       </div>

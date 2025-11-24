@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,9 +28,10 @@ import {
   Trash2
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { getCustomers, createCustomer, updateCustomer, updateCustomerPoints, deleteCustomer, getCustomerStats } from '@/lib/actions/customer.actions'
 
 interface Customer {
-  id: string
+  _id: string
   name: string
   email?: string
   phone?: string
@@ -38,7 +39,7 @@ interface Customer {
   loyaltyPoints: number
   totalSpent: number
   totalOrders: number
-  joinDate: string
+  createdAt: string
   lastVisit: string
   tier: 'bronze' | 'silver' | 'gold' | 'platinum'
   notes?: string
@@ -46,59 +47,55 @@ interface Customer {
   preferences?: string[]
 }
 
-const mockCustomers: Customer[] = [
-  {
-    id: '1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    phone: '+1234567890',
-    address: '123 Main St, City, State',
-    loyaltyPoints: 1250,
-    totalSpent: 2499.99,
-    totalOrders: 45,
-    joinDate: '2023-06-15',
-    lastVisit: '2024-01-15',
-    tier: 'gold',
-    notes: 'Prefers oat milk, regular customer',
-    birthday: '1985-03-20',
-    preferences: ['Coffee', 'Pastries', 'Oat Milk']
-  },
-  {
-    id: '2',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    phone: '+1234567891',
-    address: '456 Oak Ave, City, State',
-    loyaltyPoints: 890,
-    totalSpent: 1189.50,
-    totalOrders: 28,
-    joinDate: '2023-08-22',
-    lastVisit: '2024-01-14',
-    tier: 'silver',
-    notes: 'Allergic to nuts',
-    birthday: '1990-07-12',
-    preferences: ['Tea', 'Salads', 'Gluten-free']
-  },
-  {
-    id: '3',
-    name: 'Mike Johnson',
-    email: 'mike@example.com',
-    phone: '+1234567892',
-    loyaltyPoints: 2150,
-    totalSpent: 3899.75,
-    totalOrders: 67,
-    joinDate: '2023-03-10',
-    lastVisit: '2024-01-16',
-    tier: 'platinum',
-    preferences: ['Espresso', 'Sandwiches']
-  }
-]
+interface CustomerStats {
+  totalCustomers: number
+  loyaltyMembers: number
+  avgSpent: number
+  vipCustomers: number
+}
+
+
 
 export function CustomerManagement() {
-  const [customers, setCustomers] = useState<Customer[]>(mockCustomers)
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [stats, setStats] = useState<CustomerStats>({ totalCustomers: 0, loyaltyMembers: 0, avgSpent: 0, vipCustomers: 0 })
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [newCustomer, setNewCustomer] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    birthday: '',
+    notes: ''
+  })
+
+  useEffect(() => {
+    loadCustomers()
+    loadStats()
+  }, [])
+
+  const loadCustomers = async () => {
+    try {
+      const customersData = await getCustomers()
+      setCustomers(customersData)
+    } catch (error) {
+      toast.error('Failed to load customers')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadStats = async () => {
+    try {
+      const statsData = await getCustomerStats()
+      setStats(statsData)
+    } catch (error) {
+      console.error('Failed to load stats')
+    }
+  }
 
   const filteredCustomers = customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -125,24 +122,39 @@ export function CustomerManagement() {
     }
   }
 
-  const addLoyaltyPoints = (customerId: string, points: number) => {
-    setCustomers(prev => prev.map(customer => 
-      customer.id === customerId 
-        ? { ...customer, loyaltyPoints: customer.loyaltyPoints + points }
-        : customer
-    ))
-    toast.success(`Added ${points} loyalty points`)
+  const handleCreateCustomer = async () => {
+    try {
+      await createCustomer(newCustomer)
+      toast.success('Customer added successfully')
+      setIsAddDialogOpen(false)
+      setNewCustomer({ name: '', email: '', phone: '', address: '', birthday: '', notes: '' })
+      loadCustomers()
+      loadStats()
+    } catch (error) {
+      toast.error('Failed to add customer')
+    }
   }
 
-  const redeemPoints = (customerId: string, points: number) => {
-    const customer = customers.find(c => c.id === customerId)
+  const addLoyaltyPoints = async (customerId: string, points: number) => {
+    try {
+      await updateCustomerPoints(customerId, points)
+      toast.success(`Added ${points} loyalty points`)
+      loadCustomers()
+    } catch (error) {
+      toast.error('Failed to add points')
+    }
+  }
+
+  const redeemPoints = async (customerId: string, points: number) => {
+    const customer = customers.find(c => c._id === customerId)
     if (customer && customer.loyaltyPoints >= points) {
-      setCustomers(prev => prev.map(c => 
-        c.id === customerId 
-          ? { ...c, loyaltyPoints: c.loyaltyPoints - points }
-          : c
-      ))
-      toast.success(`Redeemed ${points} loyalty points`)
+      try {
+        await updateCustomerPoints(customerId, -points)
+        toast.success(`Redeemed ${points} loyalty points`)
+        loadCustomers()
+      } catch (error) {
+        toast.error('Failed to redeem points')
+      }
     } else {
       toast.error('Insufficient loyalty points')
     }
@@ -227,36 +239,64 @@ export function CustomerManagement() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="customerName">Full Name</Label>
-                  <Input id="customerName" placeholder="Enter customer name" />
+                  <Input 
+                    id="customerName" 
+                    placeholder="Enter customer name"
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="customerEmail">Email</Label>
-                  <Input id="customerEmail" type="email" placeholder="customer@example.com" />
+                  <Input 
+                    id="customerEmail" 
+                    type="email" 
+                    placeholder="customer@example.com"
+                    value={newCustomer.email}
+                    onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="customerPhone">Phone</Label>
-                  <Input id="customerPhone" placeholder="+1234567890" />
+                  <Input 
+                    id="customerPhone" 
+                    placeholder="+1234567890"
+                    value={newCustomer.phone}
+                    onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="customerAddress">Address</Label>
-                  <Textarea id="customerAddress" placeholder="Enter address" />
+                  <Textarea 
+                    id="customerAddress" 
+                    placeholder="Enter address"
+                    value={newCustomer.address}
+                    onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="customerBirthday">Birthday (Optional)</Label>
-                  <Input id="customerBirthday" type="date" />
+                  <Input 
+                    id="customerBirthday" 
+                    type="date"
+                    value={newCustomer.birthday}
+                    onChange={(e) => setNewCustomer({...newCustomer, birthday: e.target.value})}
+                  />
                 </div>
                 <div>
                   <Label htmlFor="customerNotes">Notes</Label>
-                  <Textarea id="customerNotes" placeholder="Any special notes or preferences" />
+                  <Textarea 
+                    id="customerNotes" 
+                    placeholder="Any special notes or preferences"
+                    value={newCustomer.notes}
+                    onChange={(e) => setNewCustomer({...newCustomer, notes: e.target.value})}
+                  />
                 </div>
                 <div className="flex justify-end space-x-2">
                   <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={() => {
-                    toast.success('Customer added successfully')
-                    setIsAddDialogOpen(false)
-                  }}>
+                  <Button onClick={handleCreateCustomer} disabled={!newCustomer.name.trim()}>
                     Add Customer
                   </Button>
                 </div>
@@ -277,9 +317,9 @@ export function CustomerManagement() {
               <div className="space-y-4">
                 {filteredCustomers.map(customer => (
                   <div 
-                    key={customer.id} 
+                    key={customer._id} 
                     className={`flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-colors ${
-                      selectedCustomer?.id === customer.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'
+                      selectedCustomer?._id === customer._id ? 'bg-accent border-primary' : 'hover:bg-accent/50'
                     }`}
                     onClick={() => setSelectedCustomer(customer)}
                   >
@@ -460,7 +500,7 @@ export function CustomerManagement() {
                                 if (e.key === 'Enter') {
                                   const points = parseInt((e.target as HTMLInputElement).value)
                                   if (points > 0) {
-                                    addLoyaltyPoints(selectedCustomer.id, points)
+                                    addLoyaltyPoints(selectedCustomer._id, points)
                                   }
                                 }
                               }}
@@ -471,7 +511,7 @@ export function CustomerManagement() {
                                 const input = e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement
                                 const points = parseInt(input?.value || '0')
                                 if (points > 0) {
-                                  addLoyaltyPoints(selectedCustomer.id, points)
+                                  addLoyaltyPoints(selectedCustomer._id, points)
                                 }
                               }}
                             >
@@ -504,7 +544,7 @@ export function CustomerManagement() {
                                 if (e.key === 'Enter') {
                                   const points = parseInt((e.target as HTMLInputElement).value)
                                   if (points > 0) {
-                                    redeemPoints(selectedCustomer.id, points)
+                                    redeemPoints(selectedCustomer._id, points)
                                   }
                                 }
                               }}
@@ -515,7 +555,7 @@ export function CustomerManagement() {
                                 const input = e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement
                                 const points = parseInt(input?.value || '0')
                                 if (points > 0) {
-                                  redeemPoints(selectedCustomer.id, points)
+                                  redeemPoints(selectedCustomer._id, points)
                                 }
                               }}
                             >

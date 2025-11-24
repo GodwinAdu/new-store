@@ -54,18 +54,21 @@ interface IProductBatch extends Document {
     product: mongoose.Types.ObjectId;
     warehouseId: mongoose.Types.ObjectId;
     batchNumber: string;
-    unitCost: number;
-    sellingPrice:number;
+    unitCost: number; // Total cost including shipping
+    originalUnitCost?: number; // Original cost without shipping
+    shippingCostPerUnit?: number; // Shipping cost per unit
+    sellingPrice: number;
     quantity: number;
     expiryDate?: Date;
     remaining: number;
     isDepleted: boolean;
-    depletedAt: Date;
-    createdAt: Date;
-    createdBy: Schema.Types.ObjectId
-    modifiedBy: Schema.Types.ObjectId
-    del_flag: boolean
-    mod_flag: boolean
+    depletedAt?: Date;
+    purchaseOrder?: mongoose.Types.ObjectId; // Source purchase order
+    receivedDate?: Date; // When batch was received
+    createdBy?: Schema.Types.ObjectId
+    modifiedBy?: Schema.Types.ObjectId
+    del_flag?: boolean
+    mod_flag?: boolean
     createdAt: Date
     updatedAt: Date
     [key: string]: unknown;
@@ -73,8 +76,11 @@ interface IProductBatch extends Document {
 
 interface IPurchaseItem {
     product: Schema.Types.ObjectId
-    quantity: number;
-    unitPrice: number;
+    unit: Schema.Types.ObjectId // Selected unit for purchase
+    quantity: number; // Quantity in selected unit
+    baseQuantity: number; // Converted quantity in base units
+    unitPrice: number; // Price per selected unit
+    baseUnitPrice: number; // Price per base unit
 }
 
 interface IPurchase extends Document {
@@ -98,6 +104,10 @@ interface IProductStock extends Document {
 interface IUnit extends Document {
     _id: string;
     name: string;
+    shortName?: string;
+    baseUnit?: Schema.Types.ObjectId; // Reference to base unit (e.g., piece)
+    conversionFactor: number; // How many base units this unit contains
+    unitType: "base" | "derived"; // base = piece, derived = box/dozen
     isActive: boolean
     createdBy: Schema.Types.ObjectId
     modifiedBy: Schema.Types.ObjectId

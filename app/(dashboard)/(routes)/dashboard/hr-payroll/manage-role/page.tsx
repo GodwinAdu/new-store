@@ -1,7 +1,7 @@
 import Heading from '@/components/commons/Header'
 import { buttonVariants } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { getAllRoles } from '@/lib/actions/role.actions'
+import { getRoles } from '@/lib/actions/auth.actions'
 import { cn } from '@/lib/utils'
 import { PlusCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -18,7 +18,7 @@ const page = async () => {
 
   const [role, values] = await Promise.all([
     currentUserRole(),
-    getAllRoles(),
+    getRoles(),
   ]);
 
   const addRole =

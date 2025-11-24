@@ -10,15 +10,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Minus, Package, Truck, ShoppingCart, Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { createPurchaseOrder, getSuppliers } from '@/lib/actions/purchase-dashboard.actions';
-import { getProducts } from '@/lib/actions/pos.actions';
+import { createPurchaseOrder, getSuppliers, getProductsForPurchase } from '@/lib/actions/purchase-dashboard.actions';
+import { getWarehouses, getVehicles } from '@/lib/actions/transport.actions';
+import { fetchAllUnits } from '@/lib/actions/unit.actions';
 
 interface Product {
   _id: string;
   name: string;
   sku: string;
-  price: number;
-  stock: number;
+  price?: number;
+  stock?: number;
+  unit: Array<{
+    _id: string;
+    name: string;
+    shortName: string;
+    conversionFactor: number;
+    unitType: 'base' | 'derived';
+  }>;
 }
 
 interface Supplier {
@@ -28,18 +36,42 @@ interface Supplier {
   phone: string;
 }
 
+interface Warehouse {
+  _id: string;
+  name: string;
+  location: string;
+  address: string;
+}
+
+interface Vehicle {
+  _id: string;
+  plateNumber: string;
+  type: string;
+  capacity: string;
+  driver: string;
+  status: string;
+}
+
 interface OrderItem {
   productId: string;
   productName: string;
   sku: string;
+  unitId: string;
+  unitName: string;
+  conversionFactor: number;
   quantity: number;
+  baseQuantity: number;
   unitCost: number;
+  baseUnitCost: number;
 }
 
 export default function AddPurchaseOrder() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
@@ -54,7 +86,10 @@ export default function AddPurchaseOrder() {
     carrier: '',
     trackingNumber: '',
     estimatedDelivery: '',
-    shippingCost: 0
+    shippingCost: 0,
+    warehouseId: '',
+    vehicleId: '',
+    driver: ''
   });
   
   const [wholesaleDetails, setWholesaleDetails] = useState({
@@ -69,14 +104,33 @@ export default function AddPurchaseOrder() {
 
   const loadData = async () => {
     try {
-      const [productsData, suppliersData] = await Promise.all([
-        getProducts(),
-        getSuppliers()
+      console.log('Loading data...');
+      const [productsData, suppliersData, warehousesData, vehiclesData, unitsData] = await Promise.all([
+        getProductsForPurchase(),
+        getSuppliers(),
+        getWarehouses(),
+        getVehicles(),
+        fetchAllUnits()
       ]);
-      setProducts(productsData);
-      setSuppliers(suppliersData);
+      console.log('Products loaded:', productsData?.length || 0);
+      console.log('First product:', productsData?.[0]);
+      console.log('Suppliers loaded:', suppliersData?.length || 0);
+      console.log('Warehouses loaded:', warehousesData?.length || 0);
+      console.log('Vehicles loaded:', vehiclesData?.length || 0);
+      console.log('Units loaded:', unitsData?.length || 0);
+      setProducts(productsData || []);
+      setSuppliers(suppliersData || []);
+      setWarehouses(warehousesData || []);
+      setVehicles(vehiclesData || []);
+      setUnits(unitsData || []);
     } catch (error) {
       console.error('Failed to load data:', error);
+      // Set empty arrays as fallback
+      setProducts([]);
+      setSuppliers([]);
+      setWarehouses([]);
+      setVehicles([]);
+      setUnits([]);
     }
   };
 
@@ -85,8 +139,13 @@ export default function AddPurchaseOrder() {
       productId: '',
       productName: '',
       sku: '',
+      unitId: '',
+      unitName: '',
+      conversionFactor: 1,
       quantity: 1,
-      unitCost: 0
+      baseQuantity: 1,
+      unitCost: 0,
+      baseUnitCost: 0
     }]);
   };
 
@@ -99,11 +158,92 @@ export default function AddPurchaseOrder() {
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     
     if (field === 'productId') {
-      const product = products.find(p => p._id === value);
+      const product = products.find(p => (p._id || p.id) === value);
       if (product) {
         updatedItems[index].productName = product.name;
         updatedItems[index].sku = product.sku;
-        updatedItems[index].unitCost = product.price * 0.7;
+        // Use a more professional cost estimation (70% of selling price or default)
+        const estimatedCost = product.price ? Math.round(product.price * 0.7 * 100) / 100 : 10;
+        updatedItems[index].unitCost = estimatedCost;
+        updatedItems[index].baseUnitCost = estimatedCost;
+        
+        // Auto-select unit (product's first unit or first available unit)
+        let unitToSelect = null;
+        
+        if (product.unit && product.unit.length > 0) {
+          // Use product's first assigned unit (already populated)
+          unitToSelect = product.unit[0];
+        } else if (units.length > 0) {
+          // Use first available unit if product has no assigned units
+          unitToSelect = units[0];
+        }
+        
+        if (unitToSelect) {
+          updatedItems[index].unitId = unitToSelect._id;
+          updatedItems[index].unitName = unitToSelect.name;
+          updatedItems[index].conversionFactor = unitToSelect.conversionFactor || 1;
+          
+          // Set quantity based on unit type
+          if (unitToSelect.unitType === 'base') {
+            updatedItems[index].quantity = 1;
+            updatedItems[index].baseQuantity = 1;
+          } else {
+            updatedItems[index].quantity = unitToSelect.conversionFactor || 1;
+            updatedItems[index].baseQuantity = unitToSelect.conversionFactor || 1;
+          }
+          
+          updatedItems[index].baseUnitCost = updatedItems[index].unitCost / (unitToSelect.conversionFactor || 1);
+        }
+      }
+    }
+    
+    if (field === 'unitId') {
+      const unit = units.find(u => u._id === value);
+      if (unit) {
+        updatedItems[index].unitName = unit.name;
+        updatedItems[index].conversionFactor = unit.conversionFactor || 1;
+        
+        // Auto-set quantity based on unit type
+        if (unit.unitType === 'base') {
+          // Base unit: quantity = 1 (no conversion)
+          updatedItems[index].quantity = 1;
+          updatedItems[index].baseQuantity = 1;
+        } else {
+          // Derived unit: quantity = base unit × conversion factor
+          updatedItems[index].quantity = unit.conversionFactor || 1;
+          updatedItems[index].baseQuantity = unit.conversionFactor || 1;
+        }
+        
+        // Recalculate unit cost based on conversion
+        updatedItems[index].baseUnitCost = updatedItems[index].unitCost / (unit.conversionFactor || 1);
+      }
+    }
+    
+    if (field === 'quantity' || field === 'unitCost') {
+      // Recalculate base values when quantity or unit cost changes
+      const unit = units.find(u => u._id === updatedItems[index].unitId);
+      if (unit) {
+        const conversionFactor = unit.conversionFactor || 1;
+        
+        if (field === 'quantity') {
+          if (unit.unitType === 'base') {
+            // Base unit: no conversion needed
+            updatedItems[index].baseQuantity = value;
+          } else {
+            // Derived unit: quantity × conversion factor
+            updatedItems[index].baseQuantity = value * conversionFactor;
+          }
+        }
+        
+        if (field === 'unitCost') {
+          if (unit.unitType === 'base') {
+            // Base unit: no conversion needed
+            updatedItems[index].baseUnitCost = value;
+          } else {
+            // Derived unit: cost ÷ conversion factor
+            updatedItems[index].baseUnitCost = value / conversionFactor;
+          }
+        }
       }
     }
     
@@ -111,17 +251,39 @@ export default function AddPurchaseOrder() {
   };
 
   const calculateTotals = () => {
-    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
-    const shippingCost = formData.orderType === 'transport' ? transportDetails.shippingCost : 0;
-    const discount = formData.orderType === 'wholesale' ? wholesaleDetails.bulkDiscount : 0;
-    const total = subtotal + shippingCost - discount;
+    // Calculate subtotal using base quantities and base unit costs for accuracy
+    const subtotal = items.reduce((sum, item) => {
+      const itemTotal = item.baseQuantity * item.baseUnitCost;
+      return sum + (isNaN(itemTotal) ? 0 : itemTotal);
+    }, 0);
     
-    return { subtotal, shippingCost, discount, total };
+    const shippingCost = formData.orderType === 'transport' ? (transportDetails.shippingCost || 0) : 0;
+    const discount = formData.orderType === 'wholesale' ? (wholesaleDetails.bulkDiscount || 0) : 0;
+    
+    // Ensure all values are valid numbers
+    const validSubtotal = isNaN(subtotal) ? 0 : subtotal;
+    const validShippingCost = isNaN(shippingCost) ? 0 : shippingCost;
+    const validDiscount = isNaN(discount) ? 0 : discount;
+    
+    const total = validSubtotal + validShippingCost - validDiscount;
+    
+    return { 
+      subtotal: validSubtotal, 
+      shippingCost: validShippingCost, 
+      discount: validDiscount, 
+      total: Math.max(0, total) // Ensure total is never negative
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.supplierId || items.length === 0) return;
+    
+    // Validate transport order requirements
+    if (formData.orderType === 'transport' && (!transportDetails.warehouseId || !transportDetails.vehicleId)) {
+      alert('Please select both warehouse and vehicle for transport orders');
+      return;
+    }
     
     setLoading(true);
     try {
@@ -129,8 +291,11 @@ export default function AddPurchaseOrder() {
         supplierId: formData.supplierId,
         items: items.map(item => ({
           productId: item.productId,
+          unit: item.unitId,
           quantity: item.quantity,
-          unitCost: item.unitCost
+          baseQuantity: item.baseQuantity,
+          unitPrice: item.unitCost,
+          baseUnitPrice: item.baseUnitCost
         })),
         orderType: formData.orderType,
         transportDetails: formData.orderType === 'transport' ? {
@@ -181,7 +346,7 @@ export default function AddPurchaseOrder() {
                       </SelectTrigger>
                       <SelectContent>
                         {suppliers.map((supplier) => (
-                          <SelectItem key={supplier._id} value={supplier._id}>
+                          <SelectItem key={supplier._id || supplier.id} value={supplier._id || supplier.id}>
                             {supplier.name}
                           </SelectItem>
                         ))}
@@ -243,25 +408,82 @@ export default function AddPurchaseOrder() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="carrier">Carrier</Label>
+                      <Label htmlFor="warehouse">Destination Warehouse *</Label>
+                      <Select value={transportDetails.warehouseId} onValueChange={(value) => setTransportDetails({...transportDetails, warehouseId: value})}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select warehouse" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouses.map((warehouse) => (
+                            <SelectItem key={warehouse._id} value={warehouse._id}>
+                              {warehouse.name} - {warehouse.location}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="vehicle">Vehicle *</Label>
+                      <Select value={transportDetails.vehicleId} onValueChange={(value) => {
+                        const selectedVehicle = vehicles.find(v => v._id === value);
+                        setTransportDetails({
+                          ...transportDetails, 
+                          vehicleId: value,
+                          driver: selectedVehicle?.driver || ''
+                        });
+                      }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select vehicle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {vehicles.filter(v => v.status === 'available').map((vehicle) => (
+                            <SelectItem key={vehicle._id} value={vehicle._id}>
+                              {vehicle.plateNumber} - {vehicle.type} ({vehicle.capacity})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="driver">Driver</Label>
                       <Input
-                        id="carrier"
-                        value={transportDetails.carrier}
-                        onChange={(e) => setTransportDetails({...transportDetails, carrier: e.target.value})}
-                        placeholder="e.g., FedEx, UPS, DHL"
+                        id="driver"
+                        value={transportDetails.driver}
+                        onChange={(e) => setTransportDetails({...transportDetails, driver: e.target.value})}
+                        placeholder="Driver name"
+                        readOnly
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="estimatedDelivery">Estimated Delivery</Label>
+                      <Input
+                        id="estimatedDelivery"
+                        type="date"
+                        value={transportDetails.estimatedDelivery}
+                        onChange={(e) => setTransportDetails({...transportDetails, estimatedDelivery: e.target.value})}
                       />
                     </div>
                     
                     <div>
                       <Label htmlFor="shippingCost">Shipping Cost</Label>
-                      <Input
-                        id="shippingCost"
-                        type="number"
-                        step="0.01"
-                        value={transportDetails.shippingCost}
-                        onChange={(e) => setTransportDetails({...transportDetails, shippingCost: parseFloat(e.target.value) || 0})}
-                        placeholder="0.00"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">₵</span>
+                        <Input
+                          id="shippingCost"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={transportDetails.shippingCost || 0}
+                          onChange={(e) => setTransportDetails({...transportDetails, shippingCost: Math.max(0, parseFloat(e.target.value) || 0)})}
+                          placeholder="0.00"
+                          className="pl-8"
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -280,14 +502,19 @@ export default function AddPurchaseOrder() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="bulkDiscount">Bulk Discount</Label>
-                      <Input
-                        id="bulkDiscount"
-                        type="number"
-                        step="0.01"
-                        value={wholesaleDetails.bulkDiscount}
-                        onChange={(e) => setWholesaleDetails({...wholesaleDetails, bulkDiscount: parseFloat(e.target.value) || 0})}
-                        placeholder="0.00"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">₵</span>
+                        <Input
+                          id="bulkDiscount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={wholesaleDetails.bulkDiscount || 0}
+                          onChange={(e) => setWholesaleDetails({...wholesaleDetails, bulkDiscount: Math.max(0, parseFloat(e.target.value) || 0)})}
+                          placeholder="0.00"
+                          className="pl-8"
+                        />
+                      </div>
                     </div>
                     
                     <div>
@@ -295,7 +522,7 @@ export default function AddPurchaseOrder() {
                       <Input
                         id="minimumQuantity"
                         type="number"
-                        value={wholesaleDetails.minimumQuantity}
+                        value={wholesaleDetails.minimumQuantity || 0}
                         onChange={(e) => setWholesaleDetails({...wholesaleDetails, minimumQuantity: parseInt(e.target.value) || 0})}
                         placeholder="0"
                       />
@@ -316,54 +543,96 @@ export default function AddPurchaseOrder() {
               <CardContent>
                 <div className="space-y-4">
                   {items.map((item, index) => (
-                    <div key={index} className="flex items-center gap-4 p-4 border rounded-lg">
-                      <div className="flex-1">
+                    <div key={index} className="grid grid-cols-12 gap-3 items-center p-3 border rounded-lg">
+                      <div className="col-span-4">
                         <Select value={item.productId} onValueChange={(value) => updateItem(index, 'productId', value)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select product" />
                           </SelectTrigger>
                           <SelectContent>
                             {products.map((product) => (
-                              <SelectItem key={product._id} value={product._id}>
-                                {product.name} ({product.sku})
+                              <SelectItem key={product._id || product.id} value={product._id || product.id}>
+                                {product.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                       
-                      <div className="w-24">
+                      <div className="col-span-3">
+                        <Select value={item.unitId} onValueChange={(value) => updateItem(index, 'unitId', value)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(() => {
+                              if (!item.productId) {
+                                // Show all units if no product selected
+                                return units.map((unit) => (
+                                  <SelectItem key={unit._id} value={unit._id}>
+                                    {unit.name} {unit.unitType === 'derived' && `(${unit.conversionFactor})`}
+                                  </SelectItem>
+                                ));
+                              }
+                              
+                              const selectedProduct = products.find(p => (p._id || p.id) === item.productId);
+                              const productUnits = selectedProduct?.unit || [];
+                              
+                              if (productUnits.length === 0) {
+                                // Show all units if product has no assigned units
+                                return units.map((unit) => (
+                                  <SelectItem key={unit._id} value={unit._id}>
+                                    {unit.name} {unit.unitType === 'derived' && `(${unit.conversionFactor})`}
+                                  </SelectItem>
+                                ));
+                              }
+                              
+                              // Show only product's assigned units (already populated)
+                              return productUnits.map((unit) => (
+                                <SelectItem key={unit._id} value={unit._id}>
+                                  {unit.name} {unit.unitType === 'derived' && `(${unit.conversionFactor})`}
+                                </SelectItem>
+                              ));
+                            })()}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div className="col-span-2">
                         <Input
                           type="number"
-                          value={item.quantity}
+                          value={item.quantity || 1}
                           onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value) || 1)}
                           placeholder="Qty"
                           min="1"
                         />
                       </div>
                       
-                      <div className="w-32">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={item.unitCost}
-                          onChange={(e) => updateItem(index, 'unitCost', parseFloat(e.target.value) || 0)}
-                          placeholder="Unit Cost"
-                        />
+                      <div className="col-span-2">
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sm text-muted-foreground">₵</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.unitCost || 0}
+                            onChange={(e) => updateItem(index, 'unitCost', Math.max(0, parseFloat(e.target.value) || 0))}
+                            placeholder="0.00"
+                            className="pl-8"
+                          />
+                        </div>
                       </div>
                       
-                      <div className="w-32 text-right font-medium">
-                        ${(item.quantity * item.unitCost).toFixed(2)}
+                      <div className="col-span-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeItem(index)}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
                       </div>
-                      
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
                     </div>
                   ))}
                   
@@ -386,34 +655,41 @@ export default function AddPurchaseOrder() {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span className="font-medium">₵{subtotal.toFixed(2)}</span>
                   </div>
                   
-                  {formData.orderType === 'transport' && (
+                  {formData.orderType === 'transport' && shippingCost > 0 && (
                     <div className="flex justify-between">
-                      <span>Shipping:</span>
-                      <span>${shippingCost.toFixed(2)}</span>
+                      <span>Shipping Cost:</span>
+                      <span className="font-medium">₵{shippingCost.toFixed(2)}</span>
                     </div>
                   )}
                   
                   {formData.orderType === 'wholesale' && discount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Bulk Discount:</span>
-                      <span>-${discount.toFixed(2)}</span>
+                      <span className="font-medium">-₵{discount.toFixed(2)}</span>
                     </div>
                   )}
                   
-                  <hr />
+                  <hr className="my-2" />
                   <div className="flex justify-between font-bold text-lg">
-                    <span>Total:</span>
-                    <span>${total.toFixed(2)}</span>
+                    <span>Total Amount:</span>
+                    <span className="text-blue-600">₵{total.toFixed(2)}</span>
                   </div>
+                  
+                  {items.length > 0 && (
+                    <div className="text-xs text-muted-foreground mt-2">
+                      {items.length} item{items.length !== 1 ? 's' : ''} • {items.reduce((sum, item) => sum + (item.baseQuantity || 0), 0)} total units
+                    </div>
+                  )}
                 </div>
                 
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={loading || !formData.supplierId || items.length === 0}
+                  disabled={loading || !formData.supplierId || items.length === 0 || 
+                    (formData.orderType === 'transport' && (!transportDetails.warehouseId || !transportDetails.vehicleId))}
                 >
                   {loading ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

@@ -18,6 +18,22 @@ export interface ISale extends Document {
   totalCost?: number;        // Σ costOfGoods
   profit?: number;           // totalRevenue – totalCost
   saleDate: Date;
+  paymentMethod?: string;
+  subtotal?: number;
+  discount?: number;
+  tax?: number;
+  cashReceived?: number;
+  cashier?: Schema.Types.ObjectId;
+  modifiedBy?: Schema.Types.ObjectId;
+  modificationHistory?: Array<{
+    modifiedBy: Schema.Types.ObjectId;
+    modifiedAt: Date;
+    changes: any;
+    reason?: string;
+  }>;
+  isVoided?: boolean;
+  voidReason?: string;
+  voidedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,6 +63,14 @@ const saleSchema = new Schema<ISale>(
     discount: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
     cashReceived: { type: Number },
+    cashier: { type: Schema.Types.ObjectId, ref: "Staff", required: true },
+    modifiedBy: { type: Schema.Types.ObjectId, ref: "Staff" },
+    modificationHistory: [{
+      modifiedBy: { type: Schema.Types.ObjectId, ref: "Staff", required: true },
+      modifiedAt: { type: Date, default: Date.now },
+      changes: { type: Schema.Types.Mixed },
+      reason: { type: String }
+    }],
     isVoided: { type: Boolean, default: false },
     voidReason: { type: String },
     voidedAt: { type: Date }
@@ -70,7 +94,7 @@ saleSchema.pre('save', async function (next) {
     // 1️⃣ pull only active (non‑depleted) batches for this product & warehouse
     const batches = await ProductBatch.find({
       product: item.product,
-      warehouse: sale.warehouse,
+      warehouseId: sale.warehouse,
       isDepleted: false,
       remaining: { $gt: 0 },
     }).sort({ createdAt: 1 });             // FIFO – earliest batch first
@@ -81,7 +105,7 @@ saleSchema.pre('save', async function (next) {
       // 2️⃣ take as much as possible from this batch
       const take = Math.min(qtyNeeded, batch.remaining);
 
-      costAccum += take * batch.purchasePrice;
+      costAccum += take * (batch.unitCost || 0);
       batch.remaining -= take;
       qtyNeeded -= take;
 
@@ -100,16 +124,16 @@ saleSchema.pre('save', async function (next) {
 
     // 4️⃣ record revenue & cost for this line
     item.total = item.unitPrice * item.quantity;
-    (item as any).costOfGoods = costAccum;          // add field if you wish
+    item.costOfGoods = costAccum;
 
     totalRevenue += item.total;
     totalCost += costAccum;
   }
 
   // 5️⃣ final sale summaries
-  (sale as any).totalRevenue = totalRevenue;        // optional
-  (sale as any).totalCost = totalCost;           // optional
-  (sale as any).profit = totalRevenue - totalCost;
+  sale.totalRevenue = totalRevenue;
+  sale.totalCost = totalCost;
+  sale.profit = totalRevenue - totalCost;
 
   next();
 });

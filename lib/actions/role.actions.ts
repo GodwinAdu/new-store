@@ -1,385 +1,197 @@
-"use server"
+'use server'
 
-import { revalidatePath } from "next/cache";
-import Role from "../models/role.models";
-import { connectToDB } from "../mongoose";
+import { connectToDB } from '../mongoose';
+import Role from '@/lib/models/role.models';
+import Staff from '@/lib/models/staff.models';
+import { requirePermission } from '@/lib/middleware/auth';
 
-import { z } from "zod";
-import History from "../models/history.models";
-import { type User, withAuth } from "../helpers/auth";
-import { currentUser } from "../helpers/session";
-import { CreateRoleSchema } from '@/lib/validators/role.validator';
-
-
-// const values = {
-//     name: "Admin",
-//     displayName: "admin",
-//     description: "Manage the administration",
-//     permissions: {
-//         manageAccess: true,
-
-//         manageOnlyPos: true,
-//         dashboard: true,
-//         user: true,
-//         product: true,
-//         sales: true,
-//         purchase: true,
-//         stockTransfer: true,
-//         stockAdjustment: true,
-//         expenses: true,
-//         paymentAccount: true,
-//         report: true,
-
-//         addRole: true,
-//         manageRole: true,
-//         viewRole: true,
-//         editRole: true,
-//         deleteRole: true,
-
-//         addUser: true,
-//         manageUser: true,
-//         viewUser: true,
-//         editUser: true,
-//         deleteUser: true,
-
-//         listProduct: true,
-//         addProduct: true,
-//         manageProduct: true,
-//         viewProduct: true,
-//         editProduct: true,
-//         deleteProduct: true,
-
-//         addUnit: true,
-//         manageUnit: true,
-//         viewUnit: true,
-//         editUnit: true,
-//         deleteUnit: true,
-
-//         addBrand: true,
-//         manageBrand: true,
-//         viewBrand: true,
-//         editBrand: true,
-//         deleteBrand: true,
-
-//         addCategory: true,
-//         manageCategory: true,
-//         viewCategory: true,
-//         editCategory: true,
-//         deleteCategory: true,
-
-//         addPrintLabel: true,
-//         managePrintLabel: true,
-//         viewPrintLabel: true,
-
-//         addVariation: true,
-//         manageVariation: true,
-//         viewVariation: true,
-//         editVariation: true,
-//         deleteVariation: true,
-
-//         manageImportProduct: true,
-//         addSellingGroupPrice: true,
-//         manageSellingGroupPrice: true,
-//         viewSellingGroupPrice: true,
-//         editSellingGroupPrice: true,
-//         deleteSellingGroupPrice: true,
-
-//         addWarrant: true,
-//         manageWarrant: true,
-//         viewWarrant: true,
-//         editWarrant: true,
-//         deleteWarrant: true,
-
-//         manageAllSales: true,
-//         addSales: true,
-//         manageSales: true,
-//         viewSales: true,
-//         editSales: true,
-//         deleteSales: true,
-
-//         addOrder: true,
-//         manageOrder: true,
-//         viewOrder: true,
-//         editOrder: true,
-//         deleteOrder: true,
-//         listOrder: true,
-
-//         listSellReturn: true,
-
-//         importSales: true,
-
-//         listPurchase: true,
-//         addPurchase: true,
-//         managePurchase: true,
-//         viewPurchase: true,
-//         editPurchase: true,
-//         deletePurchase: true,
-
-//         listPurchaseReturn: true,
-
-//         importPurchase: true,
-
-//         listStockTransfer: true,
-//         addStockTransfer: true,
-//         manageStockTransfer: true,
-//         viewStockTransfer: true,
-//         editStockTransfer: true,
-//         deleteStockTransfer: true,
-
-//         listStockAdjustment: true,
-//         addStockAdjustment: true,
-//         manageStockAdjustment: true,
-//         viewStockAdjustment: true,
-//         editStockAdjustment: true,
-//         deleteStockAdjustment: true,
-
-//         addExpensesCategory: true,
-//         manageExpensesCategory: true,
-//         viewExpensesCategory: true,
-//         editExpensesCategory: true,
-//         deleteExpensesCategory: true,
-
-//         addExpenses: true,
-//         manageExpenses: true,
-//         viewExpenses: true,
-//         editExpenses: true,
-//         deleteExpenses: true,
-//         listExpenses: true,
-
-//         addListAccount: true,
-//         manageListAccount: true,
-//         viewListAccount: true,
-//         editListAccount: true,
-//         deleteListAccount: true,
-//         balanceSheet: true,
-//         trialBalance: true,
-//         cashFlow: true,
-//         paymentAccountReport: true,
-//         profitLostReport: true,
-//         itemsReport: true,
-//         registerReport: true,
-//         expensesReport: true,
-//         productSellReport: true,
-//         productPurchaseReport: true,
-//         sellReturnReport: true,
-//         purchaseReturnReport: true,
-//         stockTransferReport: true,
-//         stockAdjustmentReport: true,
-//         salesReport: true,
-//         purchaseReport: true,
-//         trendingProductReport: true,
-//         stockExpiryReport: true,
-//         stockReport: true,
-//         taxReport: true,
-//         saleRepresentativeReport: true,
-//         customerSupplierReport: true,
-//         // HR Access
-//         addHr: true,
-//         viewHr: true,
-//         editHr: true,
-//         deleteHr: true,
-//         manageHr: true,
-
-//         // Request Salary Access
-//         addRequestSalary: true,
-//         viewRequestSalary: true,
-//         editRequestSalary: true,
-//         deleteRequestSalary: true,
-//         manageRequestSalary: true,
-
-//         // Request Leave Access
-//         addRequestLeave: true,
-//         viewRequestLeave: true,
-//         editRequestLeave: true,
-//         deleteRequestLeave: true,
-//         manageRequestLeave: true,
-
-//         // Leave Category Access
-//         addLeaveCategory: true,
-//         viewLeaveCategory: true,
-//         editLeaveCategory: true,
-//         deleteLeaveCategory: true,
-//         manageLeaveCategory: true,
-
-//         hrReport: true,
-//     },
-// }
-
-type CreateRoleProps = z.infer<typeof CreateRoleSchema>
-export async function createRole(values:CreateRoleProps,path:string) {
-        const {
-            name,
-            displayName,
-            description,
-            permissions
-        } = values;
-
-
-try {
-    const user = await currentUser()
+export async function createDefaultRoles() {
+  try {
     await connectToDB();
 
-    // Check if any existing role matches the provided name, display name, or description
-    const existingRole = await Role.findOne({ displayName, name });
+    const existingRoles = await Role.find();
+    if (existingRoles.length > 0) return;
 
-    console.log(existingRole,"existing role")
-
-    // If an existing role is found, throw an error
-    if (existingRole) {
-        throw new Error('Role with the same name, display name, or description already exists');
-    }
-
-    const role = new Role({
-        name,
-        displayName,
-        description,
-        permissions,
-        createdBy: user?._id,
-        action_type: "create",
-    });
-
-    const history = new History({
-        actionType: 'ROLE_CREATED',
-        details: {
-            roleId: role._id,
-            createdBy: user?._id,
-        },
-        message: `${user.fullName} created new role with (ID: ${role._id}) on ${new Date().toLocaleString()}.`,
-        performedBy: user?._id,
-        entityId: role._id,
-        entityType: 'ROLE'  // The type of the entity
-    });
-
-
-    await Promise.all([
-        role.save(),
-        history.save(),
-    ]);
-
-    revalidatePath(path)
-
-    console.log("successfully .....")
-
-} catch (error) {
-    throw error;
-}
-}
-
-
-export async function fetchRoleById(id: string) {
-    try {
-        await connectToDB();
-
-        const role = await Role.findById(id);
-
-        if (!role) {
-            throw new Error('No Role found')
+    const defaultRoles = [
+      {
+        name: 'admin',
+        displayName: 'Administrator',
+        description: 'Full system access',
+        permissions: {
+          manageAccess: true,
+          dashboard: true,
+          manageProduct: true,
+          manageSales: true,
+          managePurchase: true,
+          manageExpenses: true,
+          manageListAccount: true,
+          balanceSheet: true,
+          manageHr: true,
+          manageRole: true,
+          manageUser: true
         }
-
-
-        return JSON.parse(JSON.stringify(role))
-
-    } catch (error) {
-        console.error("Error fetching role by id:", error);
-        throw error;
-    }
-}
-
-async function _getAllRoles(user: User) {
-    try {
-
-
-        await connectToDB();
-        const roles = await Role.find({ schoolId: user.schoolId });
-
-        if (!roles || roles.length === 0) {
-            console.log("Roles don't exist");
-            return []
+      },
+      {
+        name: 'manager',
+        displayName: 'Manager',
+        description: 'Management level access',
+        permissions: {
+          dashboard: true,
+          viewProduct: true,
+          addProduct: true,
+          editProduct: true,
+          viewSales: true,
+          addSales: true,
+          editSales: true,
+          viewPurchase: true,
+          addPurchase: true,
+          viewExpenses: true,
+          addExpenses: true,
+          viewListAccount: true,
+          salesReport: true,
+          purchaseReport: true
         }
-
-        return JSON.parse(JSON.stringify(roles))
-
-    } catch (error) {
-        console.error("Error fetching roles:", error);
-        throw error;
-    }
-}
-
-export const getAllRoles = await withAuth(_getAllRoles)
-export async function getRolesName() {
-    try {
-
-        const user = await currentUser();
-        if (!user) throw new Error('user not logged in');
-        const schoolId = user.schoolId;
-
-        await connectToDB();
-
-        const roles = await Role.find({ schoolId }, { displayName: 1, _id: 1 });
-
-
-        if (!roles || roles.length === 0) {
-            console.log("Roles name don't exist");
-            return null; // or throw an error if you want to handle it differently
+      },
+      {
+        name: 'cashier',
+        displayName: 'Cashier',
+        description: 'POS and basic sales access',
+        permissions: {
+          manageOnlyPos: true,
+          viewProduct: true,
+          addSales: true,
+          viewSales: true
         }
-
-        return JSON.parse(JSON.stringify(roles))
-
-    } catch (error) {
-        console.error("Error fetching roles name:", error);
-        throw error;
-    }
-}
-
-
-export async function updateRole(roleId: string, values: Partial<CreateRoleProps>, path: string) {
-    try {
-        const user = await currentUser();
-        if (!user) throw new Error('user not logged in');
-
-        await connectToDB();
-
-        const updatedRole = await Role.findByIdAndUpdate(
-            roleId,
-            { $set: values },
-            { new: true, runValidators: true }
-        );
-
-        if (!updatedRole) {
-            console.log("Role not found");
-            return null;
+      },
+      {
+        name: 'accountant',
+        displayName: 'Accountant',
+        description: 'Financial management access',
+        permissions: {
+          dashboard: true,
+          viewExpenses: true,
+          addExpenses: true,
+          editExpenses: true,
+          manageListAccount: true,
+          balanceSheet: true,
+          profitLostReport: true,
+          expensesReport: true
         }
+      }
+    ];
 
-        console.log("Update successful");
-
-        revalidatePath(path)
-
-        return JSON.parse(JSON.stringify(updatedRole));
-    } catch (error) {
-        console.error("Error updating role:", error);
-        throw error;
-    }
-}
-async function _fetchRole(user: User, value: string) {
-    try {
-
-        const schoolId = user.schoolId
-        await connectToDB();
-
-        const role = await Role.findOne({ schoolId, displayName: value });
-
-        if (!role) {
-            throw new Error("Role not found");
-        }
-
-        return JSON.parse(JSON.stringify(role));
-
-    } catch (error) {
-        console.log('Error fetching role', error);
-        throw error;
-    }
-
+    await Role.insertMany(defaultRoles);
+    return { success: true, message: 'Default roles created' };
+  } catch (error) {
+    throw new Error('Failed to create default roles');
+  }
 }
 
-export const fetchRole = await withAuth(_fetchRole)
+export async function getRoles() {
+  try {
+    await requirePermission('viewRole');
+    await connectToDB();
 
+    const roles = await Role.find({ delete_flag: false }).sort({ name: 1 });
+    return JSON.parse(JSON.stringify(roles));
+  } catch (error) {
+    throw new Error('Failed to fetch roles');
+  }
+}
+
+export async function createRole(roleData: {
+  name: string;
+  displayName: string;
+  description?: string;
+  permissions: Record<string, boolean>;
+}) {
+  try {
+    await requirePermission('addRole');
+    await connectToDB();
+
+    const role = await Role.create(roleData);
+    return JSON.parse(JSON.stringify(role));
+  } catch (error) {
+    throw new Error('Failed to create role');
+  }
+}
+
+export async function updateRole(roleId: string, roleData: {
+  name?: string;
+  displayName?: string;
+  description?: string;
+  permissions?: Record<string, boolean>;
+}) {
+  try {
+    await requirePermission('editRole');
+    await connectToDB();
+
+    const role = await Role.findByIdAndUpdate(roleId, roleData, { new: true });
+    return JSON.parse(JSON.stringify(role));
+  } catch (error) {
+    throw new Error('Failed to update role');
+  }
+}
+
+export async function deleteRole(roleId: string) {
+  try {
+    await requirePermission('deleteRole');
+    await connectToDB();
+
+    // Check if role is in use
+    const staffCount = await Staff.countDocuments({ role: roleId });
+    if (staffCount > 0) {
+      throw new Error('Cannot delete role that is assigned to staff members');
+    }
+
+    await Role.findByIdAndUpdate(roleId, { delete_flag: true });
+    return { success: true };
+  } catch (error) {
+    throw new Error('Failed to delete role');
+  }
+}
+
+export async function getStaffWithRoles() {
+  try {
+    await requirePermission('viewUser');
+    await connectToDB();
+
+    const staff = await Staff.find({ del_flag: false })
+      .populate('departmentId', 'name')
+      .sort({ fullName: 1 });
+
+    const staffWithRoles = await Promise.all(
+      staff.map(async (member) => {
+        const role = await Role.findOne({ name: member.role });
+        return {
+          id: member._id,
+          fullName: member.fullName,
+          email: member.email,
+          role: member.role,
+          roleDisplayName: role?.displayName || member.role,
+          department: member.departmentId?.name,
+          isActive: member.isActive,
+          permissions: role?.permissions || {}
+        };
+      })
+    );
+
+    return JSON.parse(JSON.stringify(staffWithRoles));
+  } catch (error) {
+    throw new Error('Failed to fetch staff with roles');
+  }
+}
+
+export async function fetchRoleById(roleId: string) {
+  try {
+    await connectToDB()
+
+    const role = await Role.findById(roleId)
+    if(!role) throw new Error("No role found");
+
+    return JSON.parse(JSON.stringify(role))
+  } catch (error) {
+    console.log("something went wrong",error);
+      throw error
+  }
+}

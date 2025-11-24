@@ -4,6 +4,7 @@ import { CellAction } from "@/components/table/cell-action";
 import { deleteUnit } from "@/lib/actions/unit.actions";
 import { ColumnDef } from "@tanstack/react-table"
 import { Edit, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 // Create the delete function
 const handleDelete = async (id: string): Promise<void> => {
@@ -20,6 +21,39 @@ export const columns: ColumnDef<IUnit>[] = [
   {
     accessorKey: "name",
     header: "Name",
+  },
+  {
+    accessorKey: "shortName",
+    header: "Short Name",
+    cell: ({ row }) => (
+      <div>{row.original.shortName || "-"}</div>
+    )
+  },
+  {
+    accessorKey: "unitType",
+    header: "Type",
+    cell: ({ row }) => (
+      <div className="capitalize">{row.original.unitType}</div>
+    )
+  },
+  {
+    accessorKey: "baseUnit",
+    header: "Base Unit",
+    cell: ({ row }) => (
+      <div>{row.original.baseUnit?.name || "-"}</div>
+    )
+  },
+  {
+    accessorKey: "conversionFactor",
+    header: "Conversion",
+    cell: ({ row }) => (
+      <div>
+        {row.original.unitType === "derived" 
+          ? `1 ${row.original.name} = ${row.original.conversionFactor} ${row.original.baseUnit?.name || "units"}`
+          : "Base unit"
+        }
+      </div>
+    )
   },
   {
     accessorKey: "createdBy",
