@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { TrendingUp, Plus, Calendar, Edit, Trash2, Search } from 'lucide-react';
+import { TrendingUp, Plus, Calendar, Edit, Trash2, Search, AlertCircle, CheckCircle, DollarSign } from 'lucide-react';
+import { toast } from 'sonner';
 import { getIncomes, createIncome, updateIncome, deleteIncome, getAccounts } from '@/lib/actions/accounts.actions';
 
 interface Income {
@@ -47,6 +48,9 @@ export default function Incomes() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [newIncome, setNewIncome] = useState({
     description: '',
@@ -117,36 +121,62 @@ export default function Incomes() {
   };
 
   const handleCreateIncome = async () => {
+    if (!newIncome.description || !newIncome.amount || !newIncome.category || !newIncome.accountId) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    setIsCreating(true);
+    setError(null);
+    
     try {
       await createIncome(newIncome);
       setShowCreateDialog(false);
       setNewIncome({ description: '', amount: 0, category: '', accountId: '', paymentMethod: '', reference: '', notes: '' });
+      toast.success('Income record created successfully');
       loadData();
     } catch (error) {
-      console.error('Failed to create income:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create income';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleEditIncome = async () => {
     if (!selectedIncome) return;
+    
+    setIsUpdating(true);
+    setError(null);
+    
     try {
       await updateIncome(selectedIncome._id, editIncome);
       setShowEditDialog(false);
       setSelectedIncome(null);
+      toast.success('Income record updated successfully');
       loadData();
     } catch (error) {
-      console.error('Failed to update income:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update income';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleDeleteIncome = async (incomeId: string) => {
-    if (confirm('Are you sure you want to delete this income record?')) {
-      try {
-        await deleteIncome(incomeId);
-        loadData();
-      } catch (error) {
-        console.error('Failed to delete income:', error);
-      }
+    if (!confirm('Are you sure you want to delete this income record? This will also reverse the account balance change.')) {
+      return;
+    }
+    
+    try {
+      await deleteIncome(incomeId);
+      toast.success('Income record deleted successfully');
+      loadData();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete income';
+      toast.error(errorMessage);
     }
   };
 
@@ -170,8 +200,54 @@ export default function Incomes() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold">Income</h1>
+            <p className="text-gray-600">Track and manage business income sources</p>
+          </div>
+          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {Array.from({length: 3}).map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border p-6 space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="h-8 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-lg border p-6">
+          <div className="flex gap-4">
+            <div className="flex-1 h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-48 h-10 bg-gray-200 rounded animate-pulse"></div>
+            <div className="w-48 h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg border p-6 space-y-4">
+          {Array.from({length: 5}).map((_, i) => (
+            <div key={i} className="flex justify-between items-center p-4 border rounded">
+              <div className="space-y-2">
+                <div className="h-4 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 w-32 bg-gray-200 rounded animate-pulse"></div>
+                <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right space-y-1">
+                  <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -238,7 +314,7 @@ export default function Incomes() {
                     <SelectContent>
                       {accounts.map((account) => (
                         <SelectItem key={account._id} value={account._id}>
-                          {account.name} (${account.balance.toLocaleString()})
+                          {account.name} (₵{account.balance.toLocaleString()})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -275,8 +351,21 @@ export default function Incomes() {
                   rows={3}
                 />
               </div>
-              <Button onClick={handleCreateIncome} className="w-full">
-                Add Income
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+              <Button onClick={handleCreateIncome} className="w-full" disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  'Add Income'
+                )}
               </Button>
             </div>
           </DialogContent>
@@ -291,7 +380,7 @@ export default function Incomes() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${totalIncomes.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-green-600">₵{totalIncomes.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{filteredIncomes.length} transactions</p>
           </CardContent>
         </Card>
@@ -301,7 +390,7 @@ export default function Incomes() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${receivedIncomes.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-green-600">₵{receivedIncomes.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{filteredIncomes.filter(i => i.status === 'received').length} received</p>
           </CardContent>
         </Card>
@@ -311,7 +400,7 @@ export default function Incomes() {
             <TrendingUp className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">${pendingIncomes.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-yellow-600">₵{pendingIncomes.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{filteredIncomes.filter(i => i.status === 'pending').length} pending</p>
           </CardContent>
         </Card>
@@ -381,7 +470,7 @@ export default function Incomes() {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <div className="font-bold text-green-600">${income.amount.toLocaleString()}</div>
+                    <div className="font-bold text-green-600">₵{income.amount.toLocaleString()}</div>
                     <Badge className={income.status === 'received' ? 'bg-green-100 text-green-800' : 
                                     income.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                                     'bg-red-100 text-red-800'}>
@@ -400,8 +489,14 @@ export default function Incomes() {
               </div>
             ))}
             {filteredIncomes.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No income records found matching your criteria.
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <DollarSign className="h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No income records found</h3>
+                <p className="text-gray-500 mb-4">Record your first income to get started</p>
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Income
+                </Button>
               </div>
             )}
           </div>
@@ -454,8 +549,21 @@ export default function Incomes() {
                 rows={3}
               />
             </div>
-            <Button onClick={handleEditIncome} className="w-full">
-              Update Income
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
+            <Button onClick={handleEditIncome} className="w-full" disabled={isUpdating}>
+              {isUpdating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Updating...
+                </>
+              ) : (
+                'Update Income'
+              )}
             </Button>
           </div>
         </DialogContent>

@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Package, CheckCircle, AlertCircle, Truck } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Package, CheckCircle, AlertCircle, Truck, ArrowLeft, Search, RefreshCw, Calendar, DollarSign, Scan } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getAllPurchases, receivePurchaseOrder, updatePurchaseOrder } from '@/lib/actions/purchase-dashboard.actions';
+import { toast } from 'sonner';
 
 interface Purchase {
   _id: string;
@@ -59,6 +61,9 @@ export default function ReceiveOrders() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [receiptNotes, setReceiptNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('shipped');
+  const [stats, setStats] = useState<any>({});
 
   useEffect(() => {
     loadShippedOrders();
@@ -66,13 +71,30 @@ export default function ReceiveOrders() {
 
   const loadShippedOrders = async () => {
     try {
-      const data = await getAllPurchases({ status: 'shipped' });
+      const data = await getAllPurchases({ status: statusFilter });
       setPurchases(data);
+      calculateStats(data);
+      toast.success(`Loaded ${data.length} orders`);
     } catch (error) {
-      console.error('Failed to load shipped orders:', error);
+      console.error('Failed to load orders:', error);
+      toast.error('Failed to load orders');
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateStats = (data: Purchase[]) => {
+    const totalOrders = data.length;
+    const totalValue = data.reduce((sum, order) => sum + order.totalCost, 0);
+    const avgOrderValue = totalOrders > 0 ? totalValue / totalOrders : 0;
+    const uniqueSuppliers = new Set(data.map(order => order.supplier.name)).size;
+    
+    setStats({
+      totalOrders,
+      totalValue,
+      avgOrderValue,
+      uniqueSuppliers
+    });
   };
 
   const handleSelectOrder = (purchase: Purchase) => {
@@ -134,10 +156,14 @@ export default function ReceiveOrders() {
         });
       }
 
-      // Redirect back to purchase dashboard
-      router.push('/dashboard/purchase');
+      toast.success('Order received successfully!');
+      setSelectedPurchase(null);
+      setReceivedItems([]);
+      setReceiptNotes('');
+      loadShippedOrders();
     } catch (error) {
       console.error('Failed to receive order:', error);
+      toast.error('Failed to receive order');
     } finally {
       setProcessing(false);
     }
@@ -164,14 +190,74 @@ export default function ReceiveOrders() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={() => router.back()}>
-          ← Back
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Receive Orders</h1>
-          <p className="text-gray-600">Process incoming shipments and update inventory</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Receive Orders</h1>
+            <p className="text-gray-600">Process incoming shipments and update inventory</p>
+          </div>
         </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadShippedOrders}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Orders</p>
+                <p className="text-2xl font-bold">{stats.totalOrders || 0}</p>
+              </div>
+              <Package className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Value</p>
+                <p className="text-2xl font-bold">₵{(stats.totalValue || 0).toFixed(2)}</p>
+              </div>
+              <DollarSign className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Avg Order Value</p>
+                <p className="text-2xl font-bold">₵{(stats.avgOrderValue || 0).toFixed(2)}</p>
+              </div>
+              <Calendar className="h-8 w-8 text-purple-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Suppliers</p>
+                <p className="text-2xl font-bold">{stats.uniqueSuppliers || 0}</p>
+              </div>
+              <Truck className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -252,7 +338,7 @@ export default function ReceiveOrders() {
                       <h4 className="font-medium">Order Details</h4>
                       <p>Type: {selectedPurchase.orderType}</p>
                       <p>Order Date: {new Date(selectedPurchase.orderDate).toLocaleDateString()}</p>
-                      <p>Total Cost: ${selectedPurchase.totalCost.toFixed(2)}</p>
+                      <p>Total Cost: ₵{selectedPurchase.totalCost.toFixed(2)}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -393,7 +479,7 @@ export default function ReceiveOrders() {
                       <div className="text-sm text-gray-600">Received</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold">${summary.totalCost.toFixed(2)}</div>
+                      <div className="text-2xl font-bold">₵{summary.totalCost.toFixed(2)}</div>
                       <div className="text-sm text-gray-600">Actual Cost</div>
                     </div>
                     <div className="text-center">

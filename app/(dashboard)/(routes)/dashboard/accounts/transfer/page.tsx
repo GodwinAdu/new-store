@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowRightLeft, Plus, DollarSign, CreditCard, AlertCircle } from 'lucide-react';
-import { getAccounts, transferFunds } from '@/lib/actions/accounts.actions';
+import { ArrowRightLeft, Plus, DollarSign, CreditCard, AlertCircle, CheckCircle, History, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { getAccounts, transferFunds, getTransferHistory } from '@/lib/actions/accounts.actions';
 
 interface Account {
   _id: string;
@@ -24,6 +25,9 @@ export default function Transfer() {
   const [loading, setLoading] = useState(true);
   const [transferring, setTransferring] = useState(false);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [recentTransfers, setRecentTransfers] = useState<any[]>([]);
+  const [loadingTransfers, setLoadingTransfers] = useState(false);
 
   const [transferData, setTransferData] = useState({
     fromAccountId: '',
@@ -35,6 +39,7 @@ export default function Transfer() {
 
   useEffect(() => {
     loadAccounts();
+    loadTransferHistory();
   }, []);
 
   const loadAccounts = async () => {
@@ -48,26 +53,44 @@ export default function Transfer() {
     }
   };
 
+  const loadTransferHistory = async () => {
+    setLoadingTransfers(true);
+    try {
+      const transfers = await getTransferHistory();
+      setRecentTransfers(transfers);
+    } catch (error) {
+      console.error('Failed to load transfer history:', error);
+    } finally {
+      setLoadingTransfers(false);
+    }
+  };
+
   const handleTransfer = async () => {
-    if (!transferData.fromAccountId || !transferData.toAccountId || transferData.amount <= 0) {
-      alert('Please fill in all required fields');
+    if (!transferData.fromAccountId || !transferData.toAccountId || transferData.amount <= 0 || !transferData.description) {
+      toast.error('Please fill in all required fields');
       return;
     }
 
     if (transferData.fromAccountId === transferData.toAccountId) {
-      alert('Cannot transfer to the same account');
+      toast.error('Cannot transfer to the same account');
       return;
     }
 
     const fromAccount = accounts.find(acc => acc._id === transferData.fromAccountId);
     if (fromAccount && fromAccount.balance < transferData.amount) {
-      alert('Insufficient funds in source account');
+      toast.error('Insufficient funds in source account');
       return;
     }
 
     setTransferring(true);
+    setError(null);
+    
     try {
       await transferFunds(transferData);
+      
+      // Reload transfer history from database
+      loadTransferHistory();
+      
       setShowTransferDialog(false);
       setTransferData({
         fromAccountId: '',
@@ -76,11 +99,13 @@ export default function Transfer() {
         description: '',
         reference: ''
       });
+      
+      toast.success('Transfer completed successfully!');
       loadAccounts();
-      alert('Transfer completed successfully!');
     } catch (error) {
-      console.error('Failed to transfer funds:', error);
-      alert('Transfer failed. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Transfer failed. Please try again.';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setTransferring(false);
     }
@@ -134,7 +159,7 @@ export default function Transfer() {
                           <div className="flex justify-between items-center w-full">
                             <span>{account.name}</span>
                             <span className="text-sm text-gray-500 ml-2">
-                              ${account.balance.toLocaleString()}
+                              ₵{account.balance.toLocaleString()}
                             </span>
                           </div>
                         </SelectItem>
@@ -146,7 +171,7 @@ export default function Transfer() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">{getFromAccount()?.name}</span>
                         <span className="text-sm text-blue-600">
-                          Balance: ${getFromAccount()?.balance.toLocaleString()}
+                          Balance: ₵{getFromAccount()?.balance.toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -165,7 +190,7 @@ export default function Transfer() {
                           <div className="flex justify-between items-center w-full">
                             <span>{account.name}</span>
                             <span className="text-sm text-gray-500 ml-2">
-                              ${account.balance.toLocaleString()}
+                              ₵{account.balance.toLocaleString()}
                             </span>
                           </div>
                         </SelectItem>
@@ -177,7 +202,7 @@ export default function Transfer() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">{getToAccount()?.name}</span>
                         <span className="text-sm text-green-600">
-                          Balance: ${getToAccount()?.balance.toLocaleString()}
+                          Balance: ₵{getToAccount()?.balance.toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -215,17 +240,18 @@ export default function Transfer() {
                   {getFromAccount() && transferData.amount > getFromAccount()!.balance && (
                     <div className="flex items-center gap-2 mt-2 text-red-600 text-sm">
                       <AlertCircle className="h-4 w-4" />
-                      Insufficient funds. Available: ${getFromAccount()!.balance.toLocaleString()}
+                      Insufficient funds. Available: ₵{getFromAccount()!.balance.toLocaleString()}
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <Label>Description</Label>
+                  <Label>Description *</Label>
                   <Input
                     value={transferData.description}
                     onChange={(e) => setTransferData({...transferData, description: e.target.value})}
-                    placeholder="Enter transfer description"
+                    placeholder="Enter transfer description (required)"
+                    required
                   />
                 </div>
 
@@ -254,32 +280,44 @@ export default function Transfer() {
                     </div>
                     <div className="flex justify-between">
                       <span>Amount:</span>
-                      <span className="font-medium">${transferData.amount.toLocaleString()}</span>
+                      <span className="font-medium">₵{transferData.amount.toLocaleString()}</span>
                     </div>
                     <hr className="my-2" />
                     <div className="flex justify-between">
                       <span>New balance ({getFromAccount()?.name}):</span>
-                      <span>${(getFromAccount()!.balance - transferData.amount).toLocaleString()}</span>
+                      <span>₵{(getFromAccount()!.balance - transferData.amount).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>New balance ({getToAccount()?.name}):</span>
-                      <span>${(getToAccount()!.balance + transferData.amount).toLocaleString()}</span>
+                      <span>₵{(getToAccount()!.balance + transferData.amount).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               )}
 
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+              
               <Button 
                 onClick={handleTransfer} 
-                disabled={transferring || !transferData.fromAccountId || !transferData.toAccountId || transferData.amount <= 0}
+                disabled={transferring || !transferData.fromAccountId || !transferData.toAccountId || transferData.amount <= 0 || !transferData.description}
                 className="w-full"
               >
                 {transferring ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Processing Transfer...
+                  </>
                 ) : (
-                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  <>
+                    <ArrowRightLeft className="h-4 w-4 mr-2" />
+                    Complete Transfer
+                  </>
                 )}
-                {transferring ? 'Processing Transfer...' : 'Complete Transfer'}
               </Button>
             </div>
           </DialogContent>
@@ -293,7 +331,7 @@ export default function Transfer() {
             <div className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-600" />
               <div>
-                <div className="text-2xl font-bold">${totalBalance.toLocaleString()}</div>
+                <div className="text-2xl font-bold">₵{totalBalance.toLocaleString()}</div>
                 <div className="text-sm text-gray-600">Total Balance</div>
               </div>
             </div>
@@ -339,7 +377,7 @@ export default function Transfer() {
                   </div>
                   <div className="text-right">
                     <div className={`font-bold ${account.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ${account.balance.toLocaleString()}
+                      ₵{account.balance.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -349,40 +387,69 @@ export default function Transfer() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Quick Transfer Tips</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Recent Transfers
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={loadTransferHistory} disabled={loadingTransfers}>
+              <RefreshCw className={`h-4 w-4 ${loadingTransfers ? 'animate-spin' : ''}`} />
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4 text-sm">
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
-                <div>
-                  <div className="font-medium">Instant Transfers</div>
-                  <div className="text-gray-600">Transfers between accounts are processed immediately</div>
-                </div>
+            {loadingTransfers ? (
+              <div className="space-y-3">
+                {Array.from({length: 3}).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-3 w-20 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="h-3 w-12 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-green-600 rounded-full mt-2"></div>
-                <div>
-                  <div className="font-medium">Transaction Records</div>
-                  <div className="text-gray-600">All transfers are automatically recorded in both accounts</div>
-                </div>
+            ) : recentTransfers.length > 0 ? (
+              <div className="space-y-3">
+                {recentTransfers.map((transfer) => (
+                  <div key={transfer._id} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                    <div className="flex-1">
+                      <div className="font-medium text-sm">{transfer.description}</div>
+                      <div className="text-xs text-gray-600">
+                        {transfer.fromAccount.name} → {transfer.toAccount.name}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(transfer.date).toLocaleString()}
+                        {transfer.reference && ` • Ref: ${transfer.reference}`}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-blue-600">
+                        ₵{transfer.amount.toLocaleString()}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle className="h-3 w-3" />
+                        {transfer.status === 'completed' ? 'Completed' : 'Pending'}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-orange-600 rounded-full mt-2"></div>
-                <div>
-                  <div className="font-medium">Balance Validation</div>
-                  <div className="text-gray-600">System checks for sufficient funds before processing</div>
-                </div>
+            ) : (
+              <div className="text-center py-8">
+                <ArrowRightLeft className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No recent transfers</h3>
+                <p className="text-gray-500 mb-4">Your recent transfers will appear here</p>
+                <Button variant="outline" onClick={() => setShowTransferDialog(true)}>
+                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  Make Transfer
+                </Button>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-purple-600 rounded-full mt-2"></div>
-                <div>
-                  <div className="font-medium">Reference Tracking</div>
-                  <div className="text-gray-600">Add references to track transfer purposes</div>
-                </div>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

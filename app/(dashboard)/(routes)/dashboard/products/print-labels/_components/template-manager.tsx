@@ -235,9 +235,9 @@ export default function TemplateManager({ currentSettings, onApplyTemplate, onSa
   return (
     <div className="space-y-4">
       {/* Header Actions */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="text-lg font-semibold">Template Manager</h3>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             type="file"
             accept=".json"
@@ -312,7 +312,7 @@ export default function TemplateManager({ currentSettings, onApplyTemplate, onSa
       </div>
 
       {/* Templates Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {templates.map((template) => (
           <Card key={template.id} className="relative">
             <CardHeader className="pb-3">
@@ -332,7 +332,7 @@ export default function TemplateManager({ currentSettings, onApplyTemplate, onSa
                 </div>
                 
                 {!template.isDefault && (
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -359,7 +359,7 @@ export default function TemplateManager({ currentSettings, onApplyTemplate, onSa
                 {/* Template Preview Info */}
                 <div className="text-xs text-muted-foreground space-y-1">
                   <div>Font: {template.settings.fontFamily} ({template.settings.fontSize}px)</div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-1">
                     {template.settings.includeName && <Badge variant="outline" className="text-xs">Name</Badge>}
                     {template.settings.includePrice && <Badge variant="outline" className="text-xs">Price</Badge>}
                     {template.settings.includeBarcode && <Badge variant="outline" className="text-xs">Barcode</Badge>}

@@ -307,3 +307,53 @@ export async function deleteProductFromWarehouse(warehouseId: string, productId:
     throw new Error('Failed to delete product from warehouse');
   }
 }
+
+export async function createWarehouse(data: {
+  name: string;
+  location: string;
+  description?: string;
+  capacity: number;
+  managerId: string;
+  type: string;
+  isActive: boolean;
+}) {
+  try {
+    await connectToDB();
+    
+    const warehouse = await Warehouse.create({
+      name: data.name,
+      location: data.location,
+      description: data.description,
+      capacity: data.capacity,
+      managerId: data.managerId,
+      type: data.type,
+      isActive: data.isActive,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    
+    return JSON.parse(JSON.stringify(warehouse));
+  } catch (error) {
+    throw new Error('Failed to create warehouse');
+  }
+}
+
+export async function deleteWarehouse(warehouseId: string) {
+  try {
+    await connectToDB();
+    
+    // Delete all product batches in this warehouse first
+    await ProductBatch.deleteMany({ warehouseId });
+    
+    // Delete the warehouse
+    const result = await Warehouse.findByIdAndDelete(warehouseId);
+    
+    if (!result) {
+      throw new Error('Warehouse not found');
+    }
+    
+    return { success: true };
+  } catch (error) {
+    throw new Error('Failed to delete warehouse');
+  }
+}

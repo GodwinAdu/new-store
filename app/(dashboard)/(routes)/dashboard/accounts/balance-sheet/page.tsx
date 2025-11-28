@@ -3,18 +3,35 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, TrendingUp, TrendingDown } from 'lucide-react';
-import { getAccountsSummary, getAccounts } from '@/lib/actions/accounts.actions';
+import { getBalanceSheet } from '@/lib/actions/accounts.actions';
 
 interface BalanceSheetData {
   assets: {
-    current: Array<{ name: string; amount: number }>;
-    fixed: Array<{ name: string; amount: number }>;
+    currentAssets: {
+      cash: { accounts: any[]; total: number };
+      bank: { accounts: any[]; total: number };
+      total: number;
+    };
+    fixedAssets: {
+      assets: { accounts: any[]; total: number };
+      total: number;
+    };
+    total: number;
   };
   liabilities: {
-    current: Array<{ name: string; amount: number }>;
-    longTerm: Array<{ name: string; amount: number }>;
+    currentLiabilities: {
+      payables: { accounts: any[]; total: number };
+      credit: { accounts: any[]; total: number };
+      total: number;
+    };
+    total: number;
   };
-  equity: Array<{ name: string; amount: number }>;
+  equity: {
+    capital: { accounts: any[]; total: number };
+    retainedEarnings: number;
+    total: number;
+  };
+  balanceCheck: boolean;
 }
 
 export default function BalanceSheet() {
@@ -27,47 +44,7 @@ export default function BalanceSheet() {
 
   const loadBalanceSheetData = async () => {
     try {
-      const [summary, accounts] = await Promise.all([
-        getAccountsSummary(),
-        getAccounts()
-      ]);
-      
-      const cashAccounts = accounts.filter((acc: any) => acc.type === 'cash');
-      const bankAccounts = accounts.filter((acc: any) => acc.type === 'bank');
-      const totalCash = cashAccounts.reduce((sum: number, acc: any) => sum + acc.balance, 0);
-      const totalBank = bankAccounts.reduce((sum: number, acc: any) => sum + acc.balance, 0);
-      
-      const data: BalanceSheetData = {
-        assets: {
-          current: [
-            { name: 'Cash and Cash Equivalents', amount: totalCash },
-            { name: 'Bank Accounts', amount: totalBank },
-            { name: 'Accounts Receivable', amount: 5000 }
-          ],
-          fixed: [
-            { name: 'Equipment', amount: 50000 },
-            { name: 'Furniture & Fixtures', amount: 15000 },
-            { name: 'Vehicles', amount: 25000 }
-          ]
-        },
-        liabilities: {
-          current: [
-            { name: 'Accounts Payable', amount: summary.totalExpenses * 0.1 },
-            { name: 'Accrued Expenses', amount: 2500 },
-            { name: 'Short-term Loans', amount: 10000 }
-          ],
-          longTerm: [
-            { name: 'Long-term Debt', amount: 30000 },
-            { name: 'Equipment Loans', amount: 15000 }
-          ]
-        },
-        equity: [
-          { name: 'Owner\'s Capital', amount: 80000 },
-          { name: 'Retained Earnings', amount: summary.netProfit },
-          { name: 'Current Year Earnings', amount: summary.totalIncomes - summary.totalExpenses }
-        ]
-      };
-      
+      const data = await getBalanceSheet();
       setBalanceSheetData(data);
     } catch (error) {
       console.error('Failed to load balance sheet data:', error);
@@ -88,15 +65,7 @@ export default function BalanceSheet() {
     return <div>Failed to load balance sheet data</div>;
   }
 
-  const totalCurrentAssets = balanceSheetData.assets.current.reduce((sum, item) => sum + item.amount, 0);
-  const totalFixedAssets = balanceSheetData.assets.fixed.reduce((sum, item) => sum + item.amount, 0);
-  const totalAssets = totalCurrentAssets + totalFixedAssets;
-
-  const totalCurrentLiabilities = balanceSheetData.liabilities.current.reduce((sum, item) => sum + item.amount, 0);
-  const totalLongTermLiabilities = balanceSheetData.liabilities.longTerm.reduce((sum, item) => sum + item.amount, 0);
-  const totalLiabilities = totalCurrentLiabilities + totalLongTermLiabilities;
-
-  const totalEquity = balanceSheetData.equity.reduce((sum, item) => sum + item.amount, 0);
+  const { assets, liabilities, equity } = balanceSheetData;
 
   return (
     <div className="space-y-6">
@@ -120,17 +89,19 @@ export default function BalanceSheet() {
             <div>
               <h4 className="font-medium mb-2">Current Assets</h4>
               <div className="space-y-2">
-                {balanceSheetData.assets.current.map((item, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>{item.name}</span>
-                    <span>${item.amount.toLocaleString()}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between text-sm">
+                  <span>Cash Accounts ({assets.currentAssets.cash.accounts.length})</span>
+                  <span>₵{assets.currentAssets.cash.total.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Bank Accounts ({assets.currentAssets.bank.accounts.length})</span>
+                  <span>₵{assets.currentAssets.bank.total.toLocaleString()}</span>
+                </div>
               </div>
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between font-medium">
                   <span>Total Current Assets</span>
-                  <span>${totalCurrentAssets.toLocaleString()}</span>
+                  <span>₵{assets.currentAssets.total.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -138,17 +109,15 @@ export default function BalanceSheet() {
             <div>
               <h4 className="font-medium mb-2">Fixed Assets</h4>
               <div className="space-y-2">
-                {balanceSheetData.assets.fixed.map((item, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>{item.name}</span>
-                    <span>${item.amount.toLocaleString()}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between text-sm">
+                  <span>Asset Accounts ({assets.fixedAssets.assets.accounts.length})</span>
+                  <span>₵{assets.fixedAssets.assets.total.toLocaleString()}</span>
+                </div>
               </div>
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between font-medium">
                   <span>Total Fixed Assets</span>
-                  <span>${totalFixedAssets.toLocaleString()}</span>
+                  <span>₵{assets.fixedAssets.total.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -156,7 +125,7 @@ export default function BalanceSheet() {
             <div className="border-t-2 pt-2">
               <div className="flex justify-between font-bold text-lg">
                 <span>Total Assets</span>
-                <span>${totalAssets.toLocaleString()}</span>
+                <span>₵{assets.total.toLocaleString()}</span>
               </div>
             </div>
           </CardContent>
@@ -174,35 +143,19 @@ export default function BalanceSheet() {
             <div>
               <h4 className="font-medium mb-2">Current Liabilities</h4>
               <div className="space-y-2">
-                {balanceSheetData.liabilities.current.map((item, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>{item.name}</span>
-                    <span>${item.amount.toLocaleString()}</span>
-                  </div>
-                ))}
+                <div className="flex justify-between text-sm">
+                  <span>Payables ({liabilities.currentLiabilities.payables.accounts.length})</span>
+                  <span>₵{liabilities.currentLiabilities.payables.total.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Credit Accounts ({liabilities.currentLiabilities.credit.accounts.length})</span>
+                  <span>₵{liabilities.currentLiabilities.credit.total.toLocaleString()}</span>
+                </div>
               </div>
               <div className="border-t pt-2 mt-2">
                 <div className="flex justify-between font-medium">
                   <span>Total Current Liabilities</span>
-                  <span>${totalCurrentLiabilities.toLocaleString()}</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-medium mb-2">Long-term Liabilities</h4>
-              <div className="space-y-2">
-                {balanceSheetData.liabilities.longTerm.map((item, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>{item.name}</span>
-                    <span>${item.amount.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t pt-2 mt-2">
-                <div className="flex justify-between font-medium">
-                  <span>Total Long-term Liabilities</span>
-                  <span>${totalLongTermLiabilities.toLocaleString()}</span>
+                  <span>₵{liabilities.currentLiabilities.total.toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -210,7 +163,7 @@ export default function BalanceSheet() {
             <div className="border-t-2 pt-2">
               <div className="flex justify-between font-bold text-lg">
                 <span>Total Liabilities</span>
-                <span>${totalLiabilities.toLocaleString()}</span>
+                <span>₵{liabilities.total.toLocaleString()}</span>
               </div>
             </div>
           </CardContent>
@@ -226,27 +179,47 @@ export default function BalanceSheet() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              {balanceSheetData.equity.map((item, index) => (
-                <div key={index} className="flex justify-between text-sm">
-                  <span>{item.name}</span>
-                  <span>${item.amount.toLocaleString()}</span>
-                </div>
-              ))}
+              <div className="flex justify-between text-sm">
+                <span>Capital ({equity.capital.accounts.length} accounts)</span>
+                <span>₵{equity.capital.total.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Retained Earnings</span>
+                <span className={equity.retainedEarnings >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  ₵{equity.retainedEarnings.toLocaleString()}
+                </span>
+              </div>
             </div>
 
             <div className="border-t-2 pt-2">
               <div className="flex justify-between font-bold text-lg">
                 <span>Total Equity</span>
-                <span>${totalEquity.toLocaleString()}</span>
+                <span>₵{equity.total.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="border-t pt-2 mt-4">
               <div className="flex justify-between font-bold text-lg">
                 <span>Total Liabilities + Equity</span>
-                <span>${(totalLiabilities + totalEquity).toLocaleString()}</span>
+                <span>₵{(liabilities.total + equity.total).toLocaleString()}</span>
               </div>
             </div>
+            
+            {balanceSheetData.balanceCheck ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-4">
+                <div className="flex items-center gap-2 text-green-800">
+                  <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                  <span className="text-sm font-medium">Balance Sheet is balanced</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-4">
+                <div className="flex items-center gap-2 text-red-800">
+                  <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                  <span className="text-sm font-medium">Balance Sheet is not balanced</span>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

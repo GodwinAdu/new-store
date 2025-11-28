@@ -405,54 +405,89 @@ export default function PrintLabelsClient({ products, stockData }: PrintLabelsCl
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <Heading title="Advanced Label Printing" description="Create professional product labels with modern features" />
-        <div className="flex flex-wrap gap-2">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Export Labels</DialogTitle>
-                <DialogDescription>
-                  Export selected products data in various formats
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid grid-cols-3 gap-2">
-                <Button onClick={() => exportLabels('csv')} variant="outline">
-                  <FileText className="h-4 w-4 mr-2" />
-                  CSV
-                </Button>
-                <Button onClick={() => exportLabels('json')} variant="outline">
-                  <FileText className="h-4 w-4 mr-2" />
-                  JSON
-                </Button>
-                <Button onClick={saveTemplate} variant="outline">
-                  <Save className="h-4 w-4 mr-2" />
-                  Template
-                </Button>
+      {/* Professional Header */}
+      <div className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-900 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Printer className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
-            </DialogContent>
-          </Dialog>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Professional Label Printing</h1>
+                <p className="text-slate-600 dark:text-slate-400">Create, customize, and print professional product labels with advanced features</p>
+              </div>
+            </div>
+            
+            {/* Quick Stats */}
+            <div className="flex items-center gap-6 mt-4">
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-slate-600 dark:text-slate-400">{selectedProducts.length} selected</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="text-slate-600 dark:text-slate-400">{filteredProducts.length} total products</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                <span className="text-slate-600 dark:text-slate-400">{categories.length} categories</span>
+              </div>
+            </div>
+          </div>
           
-          <Button variant="outline" size="sm" onClick={() => previewLabels()}>
-            <Eye className="h-4 w-4 mr-2" />
-            Preview
-          </Button>
-          
-          <Button 
-            onClick={generateAdvancedLabels} 
-            disabled={selectedProducts.length === 0}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-          >
-            <Printer className="h-4 w-4 mr-2" />
-            Print Labels ({selectedProducts.length})
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="shadow-sm hover:shadow-md transition-shadow">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Data
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Download className="h-5 w-5" />
+                    Export Labels Data
+                  </DialogTitle>
+                  <DialogDescription>
+                    Export selected products data in various formats for external use
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-1 gap-3">
+                  <Button onClick={() => exportLabels('csv')} variant="outline" className="justify-start">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export as CSV
+                    <Badge variant="secondary" className="ml-auto">Spreadsheet</Badge>
+                  </Button>
+                  <Button onClick={() => exportLabels('json')} variant="outline" className="justify-start">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export as JSON
+                    <Badge variant="secondary" className="ml-auto">Data</Badge>
+                  </Button>
+                  <Button onClick={saveTemplate} variant="outline" className="justify-start">
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Template
+                    <Badge variant="secondary" className="ml-auto">Reusable</Badge>
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Button variant="outline" onClick={() => previewLabels()} className="shadow-sm hover:shadow-md transition-shadow">
+              <Eye className="h-4 w-4 mr-2" />
+              Preview Labels
+            </Button>
+            
+            <Button 
+              onClick={generateAdvancedLabels} 
+              disabled={selectedProducts.length === 0}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Print {selectedProducts.length > 0 ? `${selectedProducts.length} Labels` : 'Labels'}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -466,9 +501,9 @@ export default function PrintLabelsClient({ products, stockData }: PrintLabelsCl
         onUpdateSelection={setSelectedProducts}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-        {/* Templates & Settings */}
-        <Card className="xl:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Professional Templates & Settings */}
+        <Card className="lg:col-span-1 shadow-lg border-0 bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
           <Tabs defaultValue="templates" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="templates">Templates</TabsTrigger>
@@ -615,17 +650,19 @@ export default function PrintLabelsClient({ products, stockData }: PrintLabelsCl
           </Tabs>
         </Card>
 
-        {/* Product Selection */}
-        <Card className="xl:col-span-3">
-          <CardHeader>
+        {/* Professional Product Selection */}
+        <Card className="lg:col-span-3 shadow-lg border-0 bg-gradient-to-b from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
+          <CardHeader className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-blue-900 rounded-t-lg border-b">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Select Products
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                    <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  Product Selection
                 </CardTitle>
-                <CardDescription>
-                  Choose products to print labels for ({selectedProducts.length} of {filteredProducts.length} selected)
+                <CardDescription className="mt-2 text-base">
+                  Choose products to print labels for • {selectedProducts.length} of {filteredProducts.length} selected
                 </CardDescription>
               </div>
               
@@ -773,7 +810,7 @@ export default function PrintLabelsClient({ products, stockData }: PrintLabelsCl
                   </TableBody>
                 </Table>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                   {filteredProducts.map((product) => {
                     const stock = stockData.find(s => s.product?._id === product._id)
                     const isSelected = selectedProducts.includes(product._id)

@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { CreditCard, Plus, DollarSign, Edit, Trash2, Eye, Search, ArrowUpDown } from 'lucide-react';
+import { CreditCard, Plus, DollarSign, Edit, Trash2, Eye, Search, ArrowUpDown, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { getAccounts, createAccount, updateAccount, deleteAccount, getAccountTransactions } from '@/lib/actions/accounts.actions';
 
 interface Account {
@@ -45,6 +46,9 @@ export default function ListAccounts() {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [newAccount, setNewAccount] = useState({
     name: '',
@@ -102,36 +106,62 @@ export default function ListAccounts() {
   };
 
   const handleCreateAccount = async () => {
+    if (!newAccount.name || !newAccount.type) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    setIsCreating(true);
+    setError(null);
+    
     try {
       await createAccount(newAccount);
       setShowCreateDialog(false);
       setNewAccount({ name: '', type: '', accountNumber: '', bankName: '', description: '' });
+      toast.success('Account created successfully');
       loadAccounts();
     } catch (error) {
-      console.error('Failed to create account:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleEditAccount = async () => {
     if (!selectedAccount) return;
+    
+    setIsUpdating(true);
+    setError(null);
+    
     try {
       await updateAccount(selectedAccount._id, editAccount);
       setShowEditDialog(false);
       setSelectedAccount(null);
+      toast.success('Account updated successfully');
       loadAccounts();
     } catch (error) {
-      console.error('Failed to update account:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update account';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleDeleteAccount = async (accountId: string) => {
-    if (confirm('Are you sure you want to close this account?')) {
-      try {
-        await deleteAccount(accountId);
-        loadAccounts();
-      } catch (error) {
-        console.error('Failed to delete account:', error);
-      }
+    if (!confirm('Are you sure you want to close this account? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      await deleteAccount(accountId);
+      toast.success('Account closed successfully');
+      loadAccounts();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to close account';
+      toast.error(errorMessage);
     }
   };
 
@@ -259,8 +289,21 @@ export default function ListAccounts() {
                   rows={3}
                 />
               </div>
-              <Button onClick={handleCreateAccount} className="w-full">
-                Create Account
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+              <Button onClick={handleCreateAccount} className="w-full" disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Account'
+                )}
               </Button>
             </div>
           </DialogContent>
@@ -274,7 +317,7 @@ export default function ListAccounts() {
             <div className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-600" />
               <div>
-                <div className="text-2xl font-bold">${totalBalance.toLocaleString()}</div>
+                <div className="text-2xl font-bold">₵{totalBalance.toLocaleString()}</div>
                 <div className="text-sm text-gray-600">Total Balance</div>
               </div>
             </div>
@@ -383,7 +426,7 @@ export default function ListAccounts() {
                     <span className={`text-lg font-bold ${
                       account.balance >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {account.balance.toLocaleString()}
+                      ₵{account.balance.toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -451,8 +494,21 @@ export default function ListAccounts() {
                 </Select>
               </div>
             </div>
-            <Button onClick={handleEditAccount} className="w-full">
-              Update Account
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
+            <Button onClick={handleEditAccount} className="w-full" disabled={isUpdating}>
+              {isUpdating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Updating...
+                </>
+              ) : (
+                'Update Account'
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -484,7 +540,7 @@ export default function ListAccounts() {
                     <div className={`font-bold ${
                       transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {transaction.type === 'income' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                      {transaction.type === 'income' ? '+' : '-'}₵{transaction.amount.toFixed(2)}
                     </div>
                     <Badge className={transaction.status === 'paid' || transaction.status === 'received' ? 
                       'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>

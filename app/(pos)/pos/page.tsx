@@ -11,11 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { POSLayout } from '@/components/pos/pos-layout'
+import { VoiceAssistant } from '@/components/pos/voice-assistant'
+import { VoiceSearch } from '@/components/pos/voice-search'
+import { VoiceSettings } from '@/components/pos/voice-settings'
 import { getProducts, processSale, getTodayStats } from '@/lib/actions/pos.actions'
 import { getCustomers, updateCustomerPoints } from '@/lib/actions/customer.actions'
 import { fetchAllWarehouses } from '@/lib/actions/warehouse.actions'
 import { getWarehouseProducts } from '@/lib/actions/warehouse.actions'
 import { usePOSStore } from '@/lib/store/pos-store'
+import { useVoice } from '@/hooks/use-voice'
 import { 
   ShoppingCart, 
   Search, 
@@ -109,6 +113,13 @@ function POSContent() {
   const [warehouses, setWarehouses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [lastSale, setLastSale] = useState<any>(null)
+  const [voiceSearchTerm, setVoiceSearchTerm] = useState('')
+  const { speak } = useVoice()
+
+  useEffect(() => {
+    const { voiceManager } = require('@/lib/voice-manager')
+    return voiceManager.onCommand(handleVoiceCommand)
+  }, [])
 
   const categories = ['All', 'Beverages', 'Food', 'Bakery', 'Snacks']
 
@@ -227,6 +238,7 @@ function POSContent() {
       addToCart(product, unit, quantity)
       const unitName = unit ? unit.name : 'unit'
       toast.success(`${product.name} (${unitName}) added to cart`)
+      speak(`Added ${product.name} to cart`)
     } catch (error) {
       toast.error('Failed to add item to cart. Please try again.')
     }
@@ -307,6 +319,7 @@ function POSContent() {
         toast.success('Payment processed successfully!')
       }
       
+      speak('Payment successful')
       printReceipt()
       clearCart()
       loadProducts()
@@ -543,6 +556,63 @@ function POSContent() {
       toast.success('Cash drawer opened - Event recorded')
     } catch (error) {
       toast.error('Failed to record no sale event')
+    }
+  }
+
+  const handleVoiceCommand = (command: string, params?: any) => {
+    switch (command) {
+      case 'ADD_PRODUCT':
+        if (params?.name) {
+          const product = products.find(p => 
+            p.name.toLowerCase().includes(params.name.toLowerCase())
+          )
+          if (product) {
+            handleAddToCart(product)
+            speak(`Added ${product.name} to cart`)
+          } else {
+            speak(`Product ${params.name} not found`)
+          }
+        }
+        break
+        
+      case 'SEARCH':
+        if (params?.term) {
+          setSearchTerm(params.term)
+          speak(`Searching for ${params.term}`)
+        }
+        break
+        
+      case 'PROCESS_PAYMENT':
+        if (cart.length > 0) {
+          processPayment()
+        } else {
+          speak('Cart is empty')
+        }
+        break
+        
+      case 'SET_CASH_PAYMENT':
+        setPaymentMethod('cash')
+        speak('Payment method set to cash')
+        break
+        
+      case 'SET_CARD_PAYMENT':
+        setPaymentMethod('card')
+        speak('Payment method set to card')
+        break
+        
+      case 'PRINT_RECEIPT':
+        if (lastSale) {
+          printSaleReceipt(lastSale)
+          speak('Receipt printed')
+        } else {
+          speak('No recent sale to print')
+        }
+        break
+        
+      case 'CLEAR_CART':
+        clearCart()
+        speak('Cart cleared')
+        break
     }
   }
 
@@ -943,49 +1013,29 @@ function POSContent() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 p-4 bg-white rounded-lg border">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search products or scan barcode..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 h-10"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchTerm) {
-                    const product = products.find(p => 
-                      p.name.toLowerCase().includes(searchTerm.toLowerCase())
-                    )
-                    if (product) {
-                      handleProductClick(product)
-                      setSearchTerm('')
-                    }
+            <div className="flex-1">
+              <VoiceSearch
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                onProductSelect={(productName) => {
+                  const product = products.find(p => 
+                    p.name.toLowerCase().includes(productName.toLowerCase())
+                  )
+                  if (product) {
+                    handleProductClick(product)
+                    setSearchTerm('')
+                  } else {
+                    toast.error(`Product "${productName}" not found`)
                   }
                 }}
+                placeholder="Search products, scan barcode, or use voice..."
               />
             </div>
             <Button variant="outline" size="sm" className="h-10">
               <QrCode className="h-4 w-4 mr-2" />
               Scan
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-10"
-              onClick={() => {
-                // Add test units to first product for testing
-                if (products.length > 0) {
-                  const testProduct = products[0]
-                  testProduct.units = [
-                    { _id: '1', name: 'Box', conversionFactor: 12, sellingPrice: testProduct.price * 12 * 0.9 },
-                    { _id: '2', name: 'Dozen', conversionFactor: 12, sellingPrice: testProduct.price * 12 * 0.95 }
-                  ]
-                  setProducts([...products])
-                  toast.success('Test units added to first product')
-                }
-              }}
-            >
-              Test Units
-            </Button>
+            <VoiceSettings />
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
               <SelectTrigger className="w-32 h-10">
                 <SelectValue />
@@ -1365,6 +1415,8 @@ function POSContent() {
               </Card>
             </>
           )}
+
+          <VoiceAssistant onVoiceCommand={handleVoiceCommand} />
 
           <Card className="p-4">
             <h3 className="font-semibold mb-3">Quick Actions</h3>

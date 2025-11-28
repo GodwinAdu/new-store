@@ -9,23 +9,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createSaleOrder } from '@/lib/actions/sales-dashboard.actions'
-import { getProducts } from '@/lib/actions/pos.actions'
+import { getWarehouseProducts } from '@/lib/actions/warehouse.actions'
 import { getCustomers } from '@/lib/actions/customer.actions'
-import { Plus, Minus, Trash2, ShoppingCart, User, Package } from 'lucide-react'
+import { Plus, Minus, Trash2, ShoppingCart, User, Package, Search, ArrowLeft, Check, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 
 interface OrderItem {
   productId: string
   productName: string
+  productSku: string
   quantity: number
   unitPrice: number
   total: number
+  stock: number
 }
 
 export default function AddOrdersPage() {
+  const router = useRouter()
   const [products, setProducts] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [warehouses, setWarehouses] = useState<any[]>([])
+  const [selectedWarehouse, setSelectedWarehouse] = useState<any>(null)
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
@@ -33,35 +40,77 @@ export default function AddOrdersPage() {
   const [tax, setTax] = useState(8.5)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [createdOrderId, setCreatedOrderId] = useState('')
 
   useEffect(() => {
     loadData()
   }, [])
 
+  useEffect(() => {
+    if (selectedWarehouse) loadProducts()
+  }, [selectedWarehouse])
+
   const loadData = async () => {
     try {
-      const [productsData, customersData] = await Promise.all([
-        getProducts(),
+      const { fetchAllWarehouses } = await import('@/lib/actions/warehouse.actions')
+      const [warehousesData, customersData] = await Promise.all([
+        fetchAllWarehouses(),
         getCustomers()
       ])
-      setProducts(productsData)
+      
+      if (!warehousesData || warehousesData.length === 0) {
+        toast.error('No warehouses found. Please contact administrator.')
+        return
+      }
+      
+      setWarehouses(warehousesData)
       setCustomers(customersData)
+      
+      if (warehousesData.length > 0) {
+        setSelectedWarehouse(warehousesData[0])
+        toast.success(`Connected to ${warehousesData[0].name}`)
+      }
     } catch (error) {
       toast.error('Failed to load data')
     }
   }
 
+  const loadProducts = async () => {
+    if (!selectedWarehouse) return
+    
+    try {
+      const productsData = await getWarehouseProducts(selectedWarehouse._id)
+      setProducts(productsData.map(p => ({ ...p, stock: p.totalStock || 0 })))
+    } catch (error) {
+      toast.error(`Failed to load products from ${selectedWarehouse.name}`)
+      setProducts([])
+    }
+  }
+
   const addItem = (product: any) => {
-    const existing = orderItems.find(item => item.productId === product.id)
+    if (product.stock <= 0) {
+      toast.error('Product is out of stock')
+      return
+    }
+    
+    const existing = orderItems.find(item => item.productId === product._id)
     if (existing) {
-      updateItemQuantity(product.id, existing.quantity + 1)
+      if (existing.quantity >= product.stock) {
+        toast.error('Cannot add more items than available stock')
+        return
+      }
+      updateItemQuantity(product._id, existing.quantity + 1)
     } else {
       setOrderItems(prev => [...prev, {
-        productId: product.id,
+        productId: product._id,
         productName: product.name,
+        productSku: product.sku,
         quantity: 1,
-        unitPrice: product.price,
-        total: product.price
+        unitPrice: product.sellingPrice,
+        total: product.sellingPrice,
+        stock: product.stock
       }])
     }
   }
@@ -71,6 +120,13 @@ export default function AddOrdersPage() {
       removeItem(productId)
       return
     }
+    
+    const item = orderItems.find(item => item.productId === productId)
+    if (item && quantity > item.stock) {
+      toast.error(`Only ${item.stock} items available in stock`)
+      return
+    }
+    
     setOrderItems(prev => prev.map(item => 
       item.productId === productId 
         ? { ...item, quantity, total: quantity * item.unitPrice }
@@ -95,7 +151,7 @@ export default function AddOrdersPage() {
 
     setLoading(true)
     try {
-      await createSaleOrder({
+      const result = await createSaleOrder({
         customerId: selectedCustomer || undefined,
         items: orderItems.map(item => ({
           productId: item.productId,
@@ -110,13 +166,10 @@ export default function AddOrdersPage() {
         notes
       })
 
+      setCreatedOrderId(result._id)
+      setShowSuccess(true)
       toast.success('Order created successfully!')
       
-      // Reset form
-      setOrderItems([])
-      setSelectedCustomer('')
-      setDiscount(0)
-      setNotes('')
     } catch (error) {
       toast.error('Failed to create order')
     } finally {
@@ -124,11 +177,61 @@ export default function AddOrdersPage() {
     }
   }
 
+  const resetForm = () => {
+    setOrderItems([])
+    setSelectedCustomer('')
+    setDiscount(0)
+    setNotes('')
+    setShowSuccess(false)
+    setCreatedOrderId('')
+  }
+
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.sku.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Add New Order</h1>
-        <p className="text-muted-foreground">Create a new sales order</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">Add New Order</h1>
+            <p className="text-muted-foreground">
+              {selectedWarehouse ? `${selectedWarehouse.name} - ${selectedWarehouse.location}` : 'Select warehouse'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <Select 
+            value={selectedWarehouse?._id || ''} 
+            onValueChange={(value) => {
+              const warehouse = warehouses.find(w => w._id === value)
+              setSelectedWarehouse(warehouse)
+            }}
+          >
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Select warehouse" />
+            </SelectTrigger>
+            <SelectContent>
+              {warehouses.map(warehouse => (
+                <SelectItem key={warehouse._id} value={warehouse._id}>
+                  {warehouse.name} - {warehouse.location}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {orderItems.length > 0 && (
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">{orderItems.length} items</p>
+              <p className="text-2xl font-bold text-primary">₵{total.toFixed(2)}</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -142,28 +245,76 @@ export default function AddOrdersPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {products.map(product => (
-                  <Card 
-                    key={product.id}
-                    className="cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => addItem(product)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg mb-3 flex items-center justify-center">
-                        <Package className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <h3 className="font-semibold text-sm mb-1">{product.name}</h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-lg font-bold text-primary">${product.price}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {product.stock} left
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                  <Input
+                    placeholder="Search products by name or SKU..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
               </div>
+              
+              {!selectedWarehouse ? (
+                <div className="text-center py-8">
+                  <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Please select a warehouse to view products</p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="text-center py-8">
+                  <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    {searchTerm ? `No products found matching "${searchTerm}"` : `No products found in ${selectedWarehouse.name}`}
+                  </p>
+                  {searchTerm && (
+                    <Button variant="outline" size="sm" className="mt-2" onClick={() => setSearchTerm('')}>
+                      Clear Search
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                  {filteredProducts.map(product => (
+                    <Card 
+                      key={product._id}
+                      className={`cursor-pointer transition-all ${
+                        product.stock <= 0 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : 'hover:shadow-md hover:scale-105'
+                      }`}
+                      onClick={() => addItem(product)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="aspect-square bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-800 dark:to-gray-700 rounded-lg mb-3 flex items-center justify-center">
+                          <Package className="h-8 w-8 text-primary" />
+                        </div>
+                        <h3 className="font-semibold text-sm mb-1 truncate" title={product.name}>
+                          {product.name}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mb-2">{product.sku}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-bold text-primary">₵{product.sellingPrice}</span>
+                          <Badge 
+                            variant={product.stock <= 5 ? 'destructive' : 'secondary'} 
+                            className="text-xs"
+                          >
+                            {product.stock} left
+                          </Badge>
+                        </div>
+                        {product.stock <= 0 && (
+                          <div className="mt-2">
+                            <Badge variant="destructive" className="text-xs w-full justify-center">
+                              Out of Stock
+                            </Badge>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -207,6 +358,7 @@ export default function AddOrdersPage() {
                 <div className="text-center py-8 text-muted-foreground">
                   <ShoppingCart className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>No items added</p>
+                  <p className="text-xs">Click on products to add them</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -214,7 +366,8 @@ export default function AddOrdersPage() {
                     <div key={item.productId} className="flex items-center justify-between p-2 bg-accent/50 rounded-lg">
                       <div className="flex-1">
                         <p className="font-medium text-sm">{item.productName}</p>
-                        <p className="text-xs text-muted-foreground">${item.unitPrice} each</p>
+                        <p className="text-xs text-muted-foreground">₵{item.unitPrice} each • {item.productSku}</p>
+                        <p className="text-xs text-orange-600">{item.stock} available</p>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Button 
@@ -241,7 +394,7 @@ export default function AddOrdersPage() {
                         </Button>
                       </div>
                       <div className="text-right ml-4">
-                        <p className="font-semibold text-sm">${item.total.toFixed(2)}</p>
+                        <p className="font-semibold text-sm">₵{(item.total || 0).toFixed(2)}</p>
                       </div>
                     </div>
                   ))}
@@ -298,37 +451,81 @@ export default function AddOrdersPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span>₵{subtotal.toFixed(2)}</span>
                   </div>
                   {discount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Discount ({discount}%):</span>
-                      <span>-${discountAmount.toFixed(2)}</span>
+                      <span>-₵{discountAmount.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
                     <span>Tax ({tax}%):</span>
-                    <span>${taxAmount.toFixed(2)}</span>
+                    <span>₵{taxAmount.toFixed(2)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-bold text-lg">
                     <span>Total:</span>
-                    <span>${total.toFixed(2)}</span>
+                    <span>₵{total.toFixed(2)}</span>
                   </div>
                 </div>
 
                 <Button 
-                  className="w-full" 
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700" 
                   onClick={handleSubmit}
                   disabled={loading || orderItems.length === 0}
                 >
-                  {loading ? 'Creating Order...' : `Create Order - $${total.toFixed(2)}`}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Creating Order...
+                    </div>
+                  ) : (
+                    `Create Order - ₵${total.toFixed(2)}`
+                  )}
                 </Button>
               </CardContent>
             </Card>
           )}
         </div>
       </div>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <Check className="h-5 w-5" />
+              Order Created Successfully!
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-center py-4">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="h-8 w-8 text-green-600" />
+              </div>
+              <p className="text-muted-foreground mb-2">Order ID: #{createdOrderId.slice(-8)}</p>
+              <p className="font-semibold text-lg">Total: ₵{total.toFixed(2)}</p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={resetForm}
+              >
+                Create Another
+              </Button>
+              <Button 
+                className="flex-1"
+                onClick={() => router.push('/dashboard/sales/list-orders')}
+              >
+                View Orders
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

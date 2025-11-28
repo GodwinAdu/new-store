@@ -9,9 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { TrendingDown, Plus, Calendar, Edit, Trash2, Search, Filter } from 'lucide-react';
+import { TrendingDown, Plus, Calendar, Edit, Trash2, Search, Filter, AlertCircle, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { getExpenses, createExpense, updateExpense, deleteExpense, getAccounts } from '@/lib/actions/accounts.actions';
-import PermissionGuard, { useAuth } from '@/components/auth/PermissionGuard';
+
 
 interface Expense {
   _id: string;
@@ -38,7 +39,7 @@ interface Account {
 }
 
 export default function Expenses() {
-  const { hasPermission } = useAuth();
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -49,6 +50,9 @@ export default function Expenses() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [newExpense, setNewExpense] = useState({
     description: '',
@@ -119,36 +123,62 @@ export default function Expenses() {
   };
 
   const handleCreateExpense = async () => {
+    if (!newExpense.description || !newExpense.amount || !newExpense.category || !newExpense.accountId) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    setIsCreating(true);
+    setError(null);
+    
     try {
       await createExpense(newExpense);
       setShowCreateDialog(false);
       setNewExpense({ description: '', amount: 0, category: '', accountId: '', paymentMethod: '', reference: '', notes: '' });
+      toast.success('Expense created successfully');
       loadData();
     } catch (error) {
-      console.error('Failed to create expense:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create expense';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsCreating(false);
     }
   };
 
   const handleEditExpense = async () => {
     if (!selectedExpense) return;
+    
+    setIsUpdating(true);
+    setError(null);
+    
     try {
       await updateExpense(selectedExpense._id, editExpense);
       setShowEditDialog(false);
       setSelectedExpense(null);
+      toast.success('Expense updated successfully');
       loadData();
     } catch (error) {
-      console.error('Failed to update expense:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update expense';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleDeleteExpense = async (expenseId: string) => {
-    if (confirm('Are you sure you want to delete this expense?')) {
-      try {
-        await deleteExpense(expenseId);
-        loadData();
-      } catch (error) {
-        console.error('Failed to delete expense:', error);
-      }
+    if (!confirm('Are you sure you want to delete this expense? This will also reverse the account balance change.')) {
+      return;
+    }
+    
+    try {
+      await deleteExpense(expenseId);
+      toast.success('Expense deleted successfully');
+      loadData();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete expense';
+      toast.error(errorMessage);
     }
   };
 
@@ -231,14 +261,13 @@ export default function Expenses() {
           <h1 className="text-3xl font-bold">Expenses</h1>
           <p className="text-gray-600">Track and manage business expenses</p>
         </div>
-        <PermissionGuard permission="addExpenses">
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Expense
-              </Button>
-            </DialogTrigger>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Expense
+            </Button>
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Expense</DialogTitle>
@@ -287,7 +316,7 @@ export default function Expenses() {
                     <SelectContent>
                       {accounts.map((account) => (
                         <SelectItem key={account._id} value={account._id}>
-                          {account.name} (${account.balance.toLocaleString()})
+                          {account.name} (₵{account.balance.toLocaleString()})
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -324,13 +353,25 @@ export default function Expenses() {
                   rows={3}
                 />
               </div>
-              <Button onClick={handleCreateExpense} className="w-full">
-                Add Expense
+              {error && (
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm">{error}</span>
+                </div>
+              )}
+              <Button onClick={handleCreateExpense} className="w-full" disabled={isCreating}>
+                {isCreating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  'Add Expense'
+                )}
               </Button>
             </div>
           </DialogContent>
-          </Dialog>
-        </PermissionGuard>
+        </Dialog>
       </div>
 
       {/* Summary Cards */}
@@ -341,7 +382,7 @@ export default function Expenses() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">${totalExpenses.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-red-600">₵{totalExpenses.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{filteredExpenses.length} transactions</p>
           </CardContent>
         </Card>
@@ -351,7 +392,7 @@ export default function Expenses() {
             <TrendingDown className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">${paidExpenses.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-green-600">₵{paidExpenses.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{filteredExpenses.filter(e => e.status === 'paid').length} paid</p>
           </CardContent>
         </Card>
@@ -361,7 +402,7 @@ export default function Expenses() {
             <TrendingDown className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">${pendingExpenses.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-yellow-600">₵{pendingExpenses.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{filteredExpenses.filter(e => e.status === 'pending').length} pending</p>
           </CardContent>
         </Card>
@@ -431,7 +472,7 @@ export default function Expenses() {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <div className="font-bold text-red-600">${expense.amount.toLocaleString()}</div>
+                    <div className="font-bold text-red-600">₵{expense.amount.toLocaleString()}</div>
                     <Badge className={expense.status === 'paid' ? 'bg-green-100 text-green-800' : 
                                     expense.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                                     'bg-red-100 text-red-800'}>
@@ -439,16 +480,12 @@ export default function Expenses() {
                     </Badge>
                   </div>
                   <div className="flex gap-2">
-                    <PermissionGuard permission="editExpenses">
-                      <Button variant="outline" size="sm" onClick={() => openEditDialog(expense)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </PermissionGuard>
-                    <PermissionGuard permission="deleteExpenses">
-                      <Button variant="outline" size="sm" onClick={() => handleDeleteExpense(expense._id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </PermissionGuard>
+                    <Button variant="outline" size="sm" onClick={() => openEditDialog(expense)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleDeleteExpense(expense._id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -458,12 +495,10 @@ export default function Expenses() {
                 <TrendingDown className="h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses found</h3>
                 <p className="text-gray-500 mb-4">Record your first expense to get started</p>
-                <PermissionGuard permission="addExpenses">
-                  <Button onClick={() => setShowCreateDialog(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Expense
-                  </Button>
-                </PermissionGuard>
+                <Button onClick={() => setShowCreateDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Expense
+                </Button>
               </div>
             )}
           </div>
@@ -516,8 +551,21 @@ export default function Expenses() {
                 rows={3}
               />
             </div>
-            <Button onClick={handleEditExpense} className="w-full">
-              Update Expense
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
+            <Button onClick={handleEditExpense} className="w-full" disabled={isUpdating}>
+              {isUpdating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Updating...
+                </>
+              ) : (
+                'Update Expense'
+              )}
             </Button>
           </div>
         </DialogContent>

@@ -332,3 +332,19 @@ export async function getTransportStats() {
     throw new Error('Failed to fetch transport statistics');
   }
 }
+
+export async function fetchTransportById(transportId: string) {
+  try {
+    await connectToDB();
+    
+    const vehicle = await Vehicle.findById(transportId);
+    
+    if (!vehicle) {
+      throw new Error('Vehicle not found');
+    }
+    
+    return JSON.parse(JSON.stringify(vehicle));
+  } catch (error) {
+    throw new Error('Failed to fetch transport by ID');
+  }
+}

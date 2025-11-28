@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Truck, User, Settings, MapPin, Phone, Hash, Users, PlusCircle } from "lucide-react"
-import { createTransport } from "@/lib/actions/transport.actions"
+import { createVehicle } from "@/lib/actions/transport.actions"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
 
@@ -25,13 +25,11 @@ const transportFormSchema = z.object({
         .max(50, {
             message: "Vehicle name must not exceed 50 characters.",
         }),
-    type: z.string({
-        required_error: "Please select a vehicle type.",
+    type: z.string().min(1, {
+        message: "Please select a vehicle type.",
     }),
     capacity: z
-        .number({
-            required_error: "Capacity is required.",
-        })
+        .number()
         .min(1, {
             message: "Capacity must be at least 1.",
         })
@@ -74,7 +72,7 @@ const transportFormSchema = z.object({
             message: "Please enter a valid phone number.",
         }),
     status: z.enum(["available", "in-use", "maintenance"], {
-        required_error: "Please select a status.",
+        message: "Please select a status.",
     }),
     isActive: z.boolean(),
 })
@@ -123,7 +121,14 @@ export default function TransportForm({ initialData, type }: Props) {
     async function onSubmit(data: TransportFormValues) {
         try {
             if (type === "create") {
-                await createTransport(data,path)
+                await createVehicle({
+                    plateNumber: data.vehicleNumber,
+                    type: data.type,
+                    capacity: data.capacity.toString(),
+                    driver: data.driverName,
+                    fuelType: 'petrol',
+                    mileage: 0
+                })
             }
 
             if (type === "update") { }

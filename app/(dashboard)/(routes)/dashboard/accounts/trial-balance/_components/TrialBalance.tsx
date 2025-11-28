@@ -1,10 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { DateRange } from "react-day-picker"
-import { DownloadIcon, PrinterIcon, RefreshCcw, ArrowUpDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { DownloadIcon, PrinterIcon, RefreshCcw, ArrowUpDown, CheckCircle, AlertCircle } from 'lucide-react'
 import { type ColumnDef } from "@tanstack/react-table"
-import { addDays } from "date-fns"
 import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
@@ -22,94 +20,77 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"
-// import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { DataTable } from '@/components/table/data-table'
+import { getTrialBalance } from '@/lib/actions/accounts.actions'
 
 interface TrialBalanceData {
-    id: string
-    account: string
+    _id: string
+    name: string
     type: string
-    credit: number | null
-    debit: number | null
+    accountNumber?: string
+    debit: number
+    credit: number
+    balance: number
 }
 
-const data: TrialBalanceData[] = [
-    {
-        id: "1",
-        account: "Supplier Due",
-        type: "liability",
-        credit: null,
-        debit: 3148099.25,
-    },
-    {
-        id: "2",
-        account: "Customer Due",
-        type: "asset",
-        credit: 54262.37,
-        debit: null,
-    },
-    {
-        id: "3",
-        account: "Shop Account",
-        type: "asset",
-        credit: 34893.00,
-        debit: null,
-    },
-    {
-        id: "4",
-        account: "Purchase Account",
-        type: "expense",
-        credit: -31042.00,
-        debit: null,
-    },
-    {
-        id: "5",
-        account: "Goods Receivable Account",
-        type: "asset",
-        credit: 40481.81,
-        debit: null,
-    },
-    {
-        id: "6",
-        account: "Sales Account",
-        type: "revenue",
-        credit: 187796.89,
-        debit: null,
-    },
-    {
-        id: "7",
-        account: "Accounts Receivable",
-        type: "asset",
-        credit: 1662.50,
-        debit: null,
-    },
-    {
-        id: "8",
-        account: "Customer",
-        type: "asset",
-        credit: 317.28,
-        debit: null,
-    },
-]
+interface TrialBalanceResponse {
+    accounts: TrialBalanceData[]
+    totals: {
+        debits: number
+        credits: number
+        difference: number
+        isBalanced: boolean
+    }
+    summary: {
+        totalAccounts: number
+        asOfDate: string
+    }
+}
 
 export default function TrialBalance() {
-    const [date, setDate] = useState<DateRange | undefined>({
-        from: new Date(),
-        to: addDays(new Date(), 20),
-    })
+    const [trialBalanceData, setTrialBalanceData] = useState<TrialBalanceResponse | null>(null)
+    const [loading, setLoading] = useState(true)
+    
+    useEffect(() => {
+        loadTrialBalance()
+    }, [])
+    
+    const loadTrialBalance = async () => {
+        setLoading(true)
+        try {
+            const data = await getTrialBalance()
+            setTrialBalanceData(data)
+        } catch (error) {
+            console.error('Failed to load trial balance:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const columns: ColumnDef<TrialBalanceData>[] = [
         {
-            accessorKey: "account",
+            accessorKey: "name",
             header: ({ column }) => {
                 return (
                     <Button
                         variant="ghost"
                         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
                     >
-                        Account
+                        Account Name
                         <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
+                )
+            },
+        },
+        {
+            accessorKey: "accountNumber",
+            header: "Account #",
+            cell: ({ row }) => {
+                const accountNumber = row.getValue("accountNumber") as string
+                return accountNumber ? (
+                    <span className="font-mono text-sm">{accountNumber}</span>
+                ) : (
+                    <span className="text-gray-400">-</span>
                 )
             },
         },
@@ -136,38 +117,57 @@ export default function TrialBalance() {
             accessorKey: "credit",
             header: "Credit",
             cell: ({ row }) => {
-                const amount = row.getValue("credit") as number | null
-                return amount ? (
-                    <span className="font-mono">
-                        {new Intl.NumberFormat('en-GH', {
-                            style: 'currency',
-                            currency: 'GHS'
-                        }).format(amount)}
+                const amount = row.getValue("credit") as number
+                return amount > 0 ? (
+                    <span className="font-mono text-red-600">
+                        ₵{amount.toLocaleString()}
                     </span>
-                ) : null
+                ) : (
+                    <span className="text-gray-400">-</span>
+                )
             },
         },
         {
             accessorKey: "debit",
             header: "Debit",
             cell: ({ row }) => {
-                const amount = row.getValue("debit") as number | null
-                return amount ? (
-                    <span className="font-mono">
-                        {new Intl.NumberFormat('en-GH', {
-                            style: 'currency',
-                            currency: 'GHS'
-                        }).format(amount)}
+                const amount = row.getValue("debit") as number
+                return amount > 0 ? (
+                    <span className="font-mono text-green-600">
+                        ₵{amount.toLocaleString()}
                     </span>
-                ) : null
+                ) : (
+                    <span className="text-gray-400">-</span>
+                )
             },
         },
     ]
 
-    const totals = data.reduce((acc, curr) => ({
-        credit: (acc.credit || 0) + (curr.credit || 0),
-        debit: (acc.debit || 0) + (curr.debit || 0),
-    }), { credit: 0, debit: 0 })
+    if (loading) {
+        return (
+            <div className="p-6 max-w-7xl mx-auto space-y-6">
+                <div className="flex items-center justify-center h-64">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            </div>
+        )
+    }
+    
+    if (!trialBalanceData) {
+        return (
+            <div className="p-6 max-w-7xl mx-auto space-y-6">
+                <div className="text-center py-8">
+                    <p className="text-gray-500">Failed to load trial balance data</p>
+                    <Button onClick={loadTrialBalance} className="mt-4">
+                        <RefreshCcw className="h-4 w-4 mr-2" />
+                        Retry
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+    
+    const { accounts, totals, summary } = trialBalanceData
 
     return (
         <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -183,7 +183,7 @@ export default function TrialBalance() {
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon">
+                                <Button variant="outline" size="icon" onClick={loadTrialBalance}>
                                     <RefreshCcw className="h-4 w-4" />
                                 </Button>
                             </TooltipTrigger>
@@ -201,11 +201,8 @@ export default function TrialBalance() {
                         <CardTitle className="text-sm font-medium">Total Credits</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
-                            {new Intl.NumberFormat('en-GH', {
-                                style: 'currency',
-                                currency: 'GHS'
-                            }).format(totals.credit)}
+                        <div className="text-2xl font-bold text-red-600">
+                            ₵{totals.credits.toLocaleString()}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Total credit balance across all accounts
@@ -217,11 +214,8 @@ export default function TrialBalance() {
                         <CardTitle className="text-sm font-medium">Total Debits</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
-                            {new Intl.NumberFormat('en-GH', {
-                                style: 'currency',
-                                currency: 'GHS'
-                            }).format(totals.debit)}
+                        <div className="text-2xl font-bold text-green-600">
+                            ₵{totals.debits.toLocaleString()}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Total debit balance across all accounts
@@ -233,11 +227,10 @@ export default function TrialBalance() {
                         <CardTitle className="text-sm font-medium">Net Balance</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">
-                            {new Intl.NumberFormat('en-GH', {
-                                style: 'currency',
-                                currency: 'GHS'
-                            }).format(totals.credit - totals.debit)}
+                        <div className={`text-2xl font-bold ${
+                            totals.difference === 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                            ₵{totals.difference.toLocaleString()}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Difference between credits and debits
@@ -250,7 +243,7 @@ export default function TrialBalance() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {new Set(data.map(item => item.type)).size}
+                            {summary.totalAccounts}
                         </div>
                         <p className="text-xs text-muted-foreground">
                             Different types of accounts in the system
@@ -261,13 +254,46 @@ export default function TrialBalance() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Account Balances</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                        Account Balances
+                        {totals.isBalanced ? (
+                            <div className="flex items-center gap-1 text-green-600">
+                                <CheckCircle className="h-4 w-4" />
+                                <span className="text-sm">Balanced</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-1 text-red-600">
+                                <AlertCircle className="h-4 w-4" />
+                                <span className="text-sm">Unbalanced</span>
+                            </div>
+                        )}
+                    </CardTitle>
                     <CardDescription>
-                        A detailed view of all account balances and their current status.
+                        Trial balance as of {new Date(summary.asOfDate).toLocaleDateString()}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <DataTable columns={columns} data={data} />
+                    <DataTable columns={columns} data={accounts} />
+                    
+                    <div className="mt-6 border-t pt-4">
+                        <div className="flex justify-between items-center font-bold text-lg">
+                            <span>TOTALS:</span>
+                            <div className="flex gap-8">
+                                <span className="text-red-600">₵{totals.credits.toLocaleString()}</span>
+                                <span className="text-green-600">₵{totals.debits.toLocaleString()}</span>
+                            </div>
+                        </div>
+                        {!totals.isBalanced && (
+                            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <div className="flex items-center gap-2 text-red-800">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <span className="text-sm font-medium">
+                                        Trial balance is out of balance by ₵{Math.abs(totals.difference).toLocaleString()}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 

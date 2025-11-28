@@ -140,20 +140,22 @@ export default function BatchOperations({ products, stockData, selectedProducts,
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Zap className="h-5 w-5" />
-          Batch Operations
+    <Card className="shadow-lg border-0 bg-gradient-to-br from-white via-slate-50 to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900">
+      <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900 dark:to-purple-900 rounded-t-lg border-b">
+        <CardTitle className="flex items-center gap-3 text-xl">
+          <div className="p-2 bg-indigo-100 dark:bg-indigo-900 rounded-lg">
+            <Zap className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          Smart Batch Operations
         </CardTitle>
-        <CardDescription>
-          Quickly select products based on various criteria
+        <CardDescription className="text-base mt-2">
+          Intelligent product selection and bulk operations for efficient label printing workflows
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="space-y-6">
-        {/* Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <CardContent className="space-y-6 p-6">
+        {/* Professional Statistics Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 p-6 bg-gradient-to-r from-slate-100 to-blue-100 dark:from-slate-800 dark:to-blue-800 rounded-xl border border-slate-200 dark:border-slate-700">
           <div className="text-center space-y-1">
             <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
             <div className="text-xs text-muted-foreground">Total Products</div>
@@ -178,14 +180,16 @@ export default function BatchOperations({ products, stockData, selectedProducts,
         
         <Separator />
         
-        {/* Quick Actions */}
+        {/* Enhanced Quick Actions */}
         <div className="space-y-4">
-          <h4 className="font-medium flex items-center gap-2">
-            <Filter className="h-4 w-4" />
-            Quick Select
-          </h4>
+          <div className="flex items-center gap-3 pb-2 border-b border-slate-200 dark:border-slate-700">
+            <div className="p-1.5 bg-green-100 dark:bg-green-900 rounded-md">
+              <Filter className="h-4 w-4 text-green-600 dark:text-green-400" />
+            </div>
+            <h4 className="font-semibold text-lg text-slate-900 dark:text-slate-100">Smart Selection Tools</h4>
+          </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <Button
               variant="outline"
               size="sm"
@@ -302,7 +306,7 @@ export default function BatchOperations({ products, stockData, selectedProducts,
         <div className="space-y-4">
           <h4 className="font-medium">Advanced Filters</h4>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Price Range */}
             <div className="space-y-2">
               <Label className="text-sm">Price Range</Label>
@@ -356,7 +360,7 @@ export default function BatchOperations({ products, stockData, selectedProducts,
                     <SelectItem value="all">All Levels</SelectItem>
                     <SelectItem value="low">Low Stock (≤10)</SelectItem>
                     <SelectItem value="medium">Medium Stock (11-50)</SelectItem>
-                    <SelectItem value="high">High Stock (>50)</SelectItem>
+                    <SelectItem value="high">High Stock (&gt;50)</SelectItem>
                     <SelectItem value="out">Out of Stock</SelectItem>
                   </SelectContent>
                 </Select>
