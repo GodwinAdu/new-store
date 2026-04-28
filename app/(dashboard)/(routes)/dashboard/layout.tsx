@@ -9,6 +9,9 @@ import {
 } from "@/components/ui/sidebar";
 import { currentUser } from "@/lib/helpers/session";
 
+// All dashboard routes use cookies (auth) — opt out of static rendering globally
+export const dynamic = 'force-dynamic';
+
 
 export default async function RootLayout({
     children,
