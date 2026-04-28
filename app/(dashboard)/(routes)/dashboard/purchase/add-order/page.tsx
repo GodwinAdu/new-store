@@ -279,9 +279,15 @@ export default function AddPurchaseOrder() {
     e.preventDefault();
     if (!formData.supplierId || items.length === 0) return;
     
+    // Validate warehouse selection for all order types
+    if (!transportDetails.warehouseId) {
+      alert('Please select a destination warehouse');
+      return;
+    }
+    
     // Validate transport order requirements
-    if (formData.orderType === 'transport' && (!transportDetails.warehouseId || !transportDetails.vehicleId)) {
-      alert('Please select both warehouse and vehicle for transport orders');
+    if (formData.orderType === 'transport' && !transportDetails.vehicleId) {
+      alert('Please select a vehicle for transport orders');
       return;
     }
     
@@ -289,6 +295,7 @@ export default function AddPurchaseOrder() {
     try {
       const orderData = {
         supplierId: formData.supplierId,
+        warehouseId: transportDetails.warehouseId,
         items: items.map(item => ({
           productId: item.productId,
           unit: item.unitId,
@@ -396,6 +403,34 @@ export default function AddPurchaseOrder() {
                 </div>
               </CardContent>
             </Card>
+
+            {(formData.orderType === 'regular' || formData.orderType === 'wholesale') && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    Delivery Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div>
+                    <Label htmlFor="warehouse">Destination Warehouse *</Label>
+                    <Select value={transportDetails.warehouseId} onValueChange={(value) => setTransportDetails({...transportDetails, warehouseId: value})}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select warehouse" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses.map((warehouse) => (
+                          <SelectItem key={warehouse._id} value={warehouse._id}>
+                            {warehouse.name} - {warehouse.location}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {formData.orderType === 'transport' && (
               <Card>
@@ -688,8 +723,8 @@ export default function AddPurchaseOrder() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={loading || !formData.supplierId || items.length === 0 || 
-                    (formData.orderType === 'transport' && (!transportDetails.warehouseId || !transportDetails.vehicleId))}
+                  disabled={loading || !formData.supplierId || items.length === 0 || !transportDetails.warehouseId ||
+                    (formData.orderType === 'transport' && !transportDetails.vehicleId)}
                 >
                   {loading ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

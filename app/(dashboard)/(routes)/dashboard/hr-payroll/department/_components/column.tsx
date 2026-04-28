@@ -2,18 +2,32 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { CellAction } from "./cell-action";
+import { format } from "date-fns";
 
-export const columns: ColumnDef<any>[] = [
+export type DepartmentColumn = {
+  id: string;
+  name: string;
+  description: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export const columns: ColumnDef<DepartmentColumn>[] = [
   {
     accessorKey: "name",
     header: "Name",
   },
   {
+    accessorKey: "description",
+    header: "Description",
+  },
+  {
     accessorKey: "createdBy",
     header: "Created By",
-    cell: ({ row }) => (
-      <div>{row.original.createdBy?.fullName}</div>
-    )
+  },
+  {
+    accessorKey: "createdAt",
+    header: "Created At",
   },
   {
     id: "actions",

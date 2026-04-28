@@ -1,5 +1,18 @@
 import { Schema, model, models, Model } from "mongoose";
 
+interface IRole {
+    name: string;
+    displayName: string;
+    description?: string;
+    permissions: Record<string, boolean>;
+    createdBy?: Schema.Types.ObjectId;
+    mod_flag?: boolean;
+    delete_flag?: boolean;
+    modifyBy?: Schema.Types.ObjectId;
+    deletedBy?: Schema.Types.ObjectId;
+    action_type?: string;
+}
+
 // Define the Role schema
 const RoleSchema: Schema<IRole> = new Schema({
     name: {
@@ -484,6 +497,66 @@ const RoleSchema: Schema<IRole> = new Schema({
             default: false
         },
 
+        // Staff Management
+        addStaff: {
+            type: Boolean,
+            default: false
+        },
+        viewStaff: {
+            type: Boolean,
+            default: false
+        },
+        editStaff: {
+            type: Boolean,
+            default: false
+        },
+        deleteStaff: {
+            type: Boolean,
+            default: false
+        },
+        manageStaff: {
+            type: Boolean,
+            default: false
+        },
+        toggleStaffStatus: {
+            type: Boolean,
+            default: false
+        },
+        toggleStaffLeave: {
+            type: Boolean,
+            default: false
+        },
+        banStaff: {
+            type: Boolean,
+            default: false
+        },
+        resetStaffPassword: {
+            type: Boolean,
+            default: false
+        },
+
+        // Department Management
+        addDepartment: {
+            type: Boolean,
+            default: false
+        },
+        viewDepartment: {
+            type: Boolean,
+            default: false
+        },
+        editDepartment: {
+            type: Boolean,
+            default: false
+        },
+        deleteDepartment: {
+            type: Boolean,
+            default: false
+        },
+        manageDepartment: {
+            type: Boolean,
+            default: false
+        },
+
         // Request Salary Access
         addRequestSalary: {
             type: Boolean,
@@ -645,7 +718,7 @@ const RoleSchema: Schema<IRole> = new Schema({
     },
     createdBy: {
         type: Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Staff",
         default: null
     },
     mod_flag: {
@@ -658,12 +731,12 @@ const RoleSchema: Schema<IRole> = new Schema({
     },
     modifyBy: {
         type: Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Staff",
         default: null
     },
     deletedBy: {
         type: Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Staff",
         default: null
     },
     action_type: {

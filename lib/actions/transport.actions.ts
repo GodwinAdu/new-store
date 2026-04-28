@@ -207,6 +207,7 @@ export async function receiveShipment(shipmentId: string, receivedItems: Array<{
 
     const shipment = await Shipment.findById(shipmentId).populate([{path:'purchaseOrder',model:Purchase}]);
     if (!shipment) throw new Error('Shipment not found');
+    if (shipment.status === 'received') throw new Error('Shipment already received');
 
     // Create product batches for received items at destination warehouse
     const ProductBatch = (await import('@/lib/models/product_batch.models')).default;
@@ -218,23 +219,19 @@ export async function receiveShipment(shipmentId: string, receivedItems: Array<{
       if (originalItem) {
         await ProductBatch.create({
           product: receivedItem.productId,
-          warehouseId: shipment.destinationWarehouse, // Store in destination warehouse
+          warehouseId: shipment.destinationWarehouse, // correct field name
           quantity: receivedItem.receivedQuantity,
           remaining: receivedItem.receivedQuantity,
           unitCost: originalItem.unitPrice,
-          sellingPrice: receivedItem.sellingPrice || originalItem.unitPrice * 1.3, // User-defined or 30% markup
-          expiryDate: receivedItem.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // User-defined or 1 year default
-          isDepleted: false
+          sellingPrice: receivedItem.sellingPrice || originalItem.unitPrice * 1.3,
+          expiryDate: receivedItem.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          isDepleted: false,
+          notes: `Received from shipment ${shipment.trackingNumber}`
         });
-      }
-    }
 
-    // Update product inventory
-    const Product = (await import('@/lib/models/product.models')).default;
-    for (const receivedItem of receivedItems) {
-      await Product.findByIdAndUpdate(receivedItem.productId, {
-        $inc: { stock: receivedItem.receivedQuantity }
-      });
+        // Update received quantity on the shipment item
+        originalItem.receivedQuantity = receivedItem.receivedQuantity;
+      }
     }
 
     // Update related purchase order status
@@ -246,17 +243,19 @@ export async function receiveShipment(shipmentId: string, receivedItems: Array<{
       });
     }
 
-    // Make vehicle available
+    // Mark vehicle available again
     if (shipment.vehicle) {
       await Vehicle.findByIdAndUpdate(shipment.vehicle, {
         status: 'available'
       });
     }
 
-    // Delete the shipment after successful receipt
-    await Shipment.findByIdAndDelete(shipmentId);
+    // Mark shipment as received (keep for audit trail — do NOT delete)
+    shipment.status = 'received';
+    shipment.actualDelivery = new Date();
+    await shipment.save();
 
-    return { success: true, message: 'Shipment received and processed successfully' };
+    return JSON.parse(JSON.stringify(shipment));
   } catch (error) {
     console.error('Error in receiveShipment:', error);
     throw new Error(`Failed to receive shipment: ${error}`);

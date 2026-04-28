@@ -2,6 +2,7 @@ import { Schema, models, model } from 'mongoose';
 
 export interface IPurchase {
   supplier: Schema.Types.ObjectId;
+  warehouse: Schema.Types.ObjectId;
   items: Array<{
     product: Schema.Types.ObjectId;
     unit: Schema.Types.ObjectId;
@@ -37,6 +38,11 @@ const purchaseSchema = new Schema<IPurchase>({
   supplier: {
     type: Schema.Types.ObjectId,
     ref: 'Supplier',
+    required: true,
+  },
+  warehouse: {
+    type: Schema.Types.ObjectId,
+    ref: 'Warehouse',
     required: true,
   },
   items: [

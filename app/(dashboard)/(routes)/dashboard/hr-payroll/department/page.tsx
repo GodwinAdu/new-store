@@ -4,15 +4,19 @@ import { DepartmentModal } from './_components/DepartmentModal'
 import { Separator } from '@/components/ui/separator'
 import { fetchAllDepartments } from '@/lib/actions/department.actions'
 import { DataTable } from '@/components/table/data-table'
-import { columns } from './_components/column'
+import { columns, DepartmentColumn } from './_components/column'
+import { format } from 'date-fns'
 
-
-// type Params = Promise<{ branchId: string }>
 const page = async () => {
-
   const data = await fetchAllDepartments();
 
-  console.log(data)
+  const formattedData: DepartmentColumn[] = data.map((item: any) => ({
+    id: item._id,
+    name: item.name,
+    description: item.description || 'N/A',
+    createdBy: item.createdBy?.fullName || 'Unknown',
+    createdAt: format(new Date(item.createdAt), 'MMM dd, yyyy'),
+  }));
 
   return (
     <>
@@ -24,7 +28,7 @@ const page = async () => {
       </div>
       <Separator />
       <div className="py-4">
-        <DataTable searchKey='name' data={data} columns={columns} />
+        <DataTable searchKey='name' data={formattedData} columns={columns} />
       </div>
     </>
   )

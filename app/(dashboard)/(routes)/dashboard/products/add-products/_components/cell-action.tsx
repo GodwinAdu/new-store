@@ -14,10 +14,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import Link from "next/link"
-import { playErrorSound, playSuccessSound } from "@/lib/audio"
-import { toast } from "@/hooks/use-toast"
+
 import { DeleteDialog } from "@/components/commons/DeleteDialog"
-import useClientRole from "@/hooks/use-client-role"
+import useClientRole from "@/lib/helpers/client-role"
 
 
 interface CellActionProps {
@@ -35,20 +34,10 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
             setLoading(true)
 
             router.refresh()
-            playSuccessSound()
-            toast({
-                title: "Deleted successfully",
-                description: "You've deleted the product successfully",
-                variant: "success",
-            })
+          
         } catch (error) {
             console.error("Delete error:", error)
-            playErrorSound()
-            toast({
-                title: "Something Went Wrong",
-                description: "Please try again later",
-                variant: "destructive",
-            })
+          
         } finally {
             setLoading(false)
         }

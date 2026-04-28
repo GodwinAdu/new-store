@@ -11,6 +11,7 @@ import { createShipment } from './transport.actions';
 
 export async function createPurchaseOrder(orderData: {
   supplierId: string;
+  warehouseId: string;
   items: Array<{
     productId: string;
     unit: string;
@@ -49,6 +50,7 @@ export async function createPurchaseOrder(orderData: {
     
     const purchase = await Purchase.create({
       supplier: orderData.supplierId,
+      warehouse: orderData.warehouseId,
       items: orderData.items.map(item => ({
         product: item.productId,
         unit: item.unit,
@@ -361,15 +363,16 @@ export async function receivePurchaseOrder(purchaseId: string, receivedItems: Ar
         
         await ProductBatch.create({
           product: receivedItem.productId,
+          warehouseId: purchase.warehouse,   // correct field name
           quantity: receivedItem.receivedQuantity,
           remaining: receivedItem.receivedQuantity,
-          unitCost: totalUnitCost, // Include shipping cost in unit cost
-          originalUnitCost: receivedItem.actualCost || originalItem.baseUnitPrice, // Track original cost without shipping
-          shippingCostPerUnit: productShippingCost / receivedItem.receivedQuantity, // Track shipping cost per unit
-          sellingPrice: receivedItem.sellingPrice || totalUnitCost * 1.3, // Base selling price on total cost including shipping
+          unitCost: totalUnitCost,
+          originalUnitCost: receivedItem.actualCost || originalItem.baseUnitPrice,
+          shippingCostPerUnit: productShippingCost / receivedItem.receivedQuantity,
+          sellingPrice: receivedItem.sellingPrice || totalUnitCost * 1.3,
           expiryDate: receivedItem.expiryDate || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
           isDepleted: false,
-          purchaseOrder: purchaseId, // Track which purchase order this came from
+          purchaseOrder: purchaseId,
           receivedDate: new Date()
         });
         

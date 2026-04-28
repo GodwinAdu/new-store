@@ -1,6 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export interface LowStockAlert {
+  productId: string
+  productName: string
+  currentStock: number
+  minStock: number
+  timestamp: number
+}
+
 interface Product {
   id: string
   name: string
@@ -67,6 +75,12 @@ interface POSState {
   getTaxAmount: () => number
   getTotal: () => number
   getChange: () => number
+
+  // Notifications (not persisted)
+  lowStockAlerts: LowStockAlert[]
+  addLowStockAlert: (alert: LowStockAlert) => void
+  dismissAlert: (productId: string) => void
+  clearAlerts: () => void
 }
 
 export const usePOSStore = create<POSState>()(
@@ -183,7 +197,27 @@ export const usePOSStore = create<POSState>()(
         const { paymentMethod, cashReceived } = get()
         const total = get().getTotal()
         return paymentMethod === 'cash' ? Math.max(0, parseFloat(cashReceived || '0') - total) : 0
-      }
+      },
+
+      // Notifications (not persisted — session-only)
+      lowStockAlerts: [],
+      addLowStockAlert: (alert) => {
+        set((state) => {
+          // Replace existing alert for the same product, or append
+          const exists = state.lowStockAlerts.some((a) => a.productId === alert.productId)
+          return {
+            lowStockAlerts: exists
+              ? state.lowStockAlerts.map((a) => (a.productId === alert.productId ? alert : a))
+              : [...state.lowStockAlerts, alert],
+          }
+        })
+      },
+      dismissAlert: (productId) => {
+        set((state) => ({
+          lowStockAlerts: state.lowStockAlerts.filter((a) => a.productId !== productId),
+        }))
+      },
+      clearAlerts: () => set({ lowStockAlerts: [] }),
     }),
     {
       name: 'pos-store',

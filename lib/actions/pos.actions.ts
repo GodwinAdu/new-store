@@ -14,30 +14,28 @@ export async function getProducts(category?: string, search?: string) {
   try {
     await connectToDB();
 
-    // Simple query with unit population
-    let products = await Product.find({ del_flag: false, isActive: true }).populate('unit').limit(50);
+    const query: any = { del_flag: false, isActive: true };
 
-    // If no products exist, create simple sample data
-    if (products.length === 0) {
-      return []
-    }
+    const products = await Product.find(query)
+      .populate('unit')
+      .populate('categoryId', 'name')
+      .sort({ name: 1 })
+      .limit(200);
 
-    // Return simple product data with units
     return products.map(product => ({
       _id: product._id.toString(),
       id: product._id.toString(),
       name: product.name,
-      price: 25, // Fixed price for simplicity
-      category: 'General',
-      stock: 100, // Fixed stock for simplicity
-      barcode: product.barcode,
+      category: (product.categoryId as any)?.name || 'General',
       sku: product.sku,
+      barcode: product.barcode,
       unit: product.unit || [],
-      isPopular: false
+      defaultCost: product.defaultCost || 0,
+      defaultMargin: product.defaultMargin || 30,
+      reorderPoint: product.reorderPoint || 10,
     }));
   } catch (error) {
     console.error('Error fetching products:', error);
-    // Return empty array instead of throwing error
     return [];
   }
 }
@@ -66,6 +64,24 @@ export async function processSale(saleData: {
 
     console.log('Processing sale with data:', saleData);
 
+    // Validate stock availability for each item
+    // NOTE: ProductBatch uses `warehouseId` (not `warehouse`) as the field name
+    for (const item of saleData.items) {
+      const batches = await ProductBatch.find({
+        product: item.productId,
+        warehouseId: saleData.warehouseId,
+        isDepleted: false,
+        remaining: { $gt: 0 }
+      }).sort({ createdAt: 1 });
+
+      const availableStock = batches.reduce((sum, batch) => sum + batch.remaining, 0);
+
+      if (availableStock < item.quantity) {
+        const product = await Product.findById(item.productId);
+        throw new Error(`Insufficient stock for ${product?.name || 'product'}. Available: ${availableStock}, Requested: ${item.quantity}`);
+      }
+    }
+
     // Calculate totals from items
     const calculatedSubtotal = saleData.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const discountAmount = (calculatedSubtotal * saleData.discount) / 100;
@@ -89,7 +105,8 @@ export async function processSale(saleData: {
       total: calculatedTotal,
       totalRevenue: calculatedTotal,
       cashReceived: saleData.cashReceived || calculatedTotal,
-      cashier:user._id
+      cashier: user._id,
+      paymentStatus: 'pending' // Set to pending for accounts verification
     });
 
     console.log('Sale created:', sale._id);
@@ -199,8 +216,46 @@ export async function voidSale(saleId: string, reason: string) {
     if (!user) throw new Error('Unauthorized');
     
     await connectToDB();
+
+    const sale = await Sale.findById(saleId);
+    if (!sale) throw new Error('Sale not found');
+    if (sale.isVoided) throw new Error('Sale is already voided');
+
+    // Restore stock: reverse the FIFO batch consumption
+    // We re-add the sold quantities back to the warehouse as a new batch
+    for (const item of sale.items) {
+      // Find the most recently depleted or reduced batch for this product/warehouse
+      // to restore into (or create a new adjustment batch)
+      const existingBatch = await ProductBatch.findOne({
+        product: item.product,
+        warehouseId: sale.warehouse,
+      }).sort({ createdAt: -1 });
+
+      if (existingBatch) {
+        // Restore into the most recent batch
+        existingBatch.remaining += item.quantity;
+        existingBatch.quantity += item.quantity;
+        if (existingBatch.isDepleted) {
+          existingBatch.isDepleted = false;
+          existingBatch.depletedAt = undefined;
+        }
+        await existingBatch.save();
+      } else {
+        // No batch exists — create a stock-restoration batch
+        await ProductBatch.create({
+          product: item.product,
+          warehouseId: sale.warehouse,
+          quantity: item.quantity,
+          remaining: item.quantity,
+          unitCost: item.costOfGoods ? item.costOfGoods / item.quantity : 0,
+          sellingPrice: item.unitPrice,
+          isDepleted: false,
+          notes: `Stock restored from voided sale ${saleId}`,
+        });
+      }
+    }
     
-    const sale = await Sale.findByIdAndUpdate(
+    const updatedSale = await Sale.findByIdAndUpdate(
       saleId,
       {
         isVoided: true,
@@ -219,9 +274,9 @@ export async function voidSale(saleId: string, reason: string) {
       { new: true }
     );
     
-    return JSON.parse(JSON.stringify(sale));
+    return JSON.parse(JSON.stringify(updatedSale));
   } catch (error) {
-    throw new Error('Failed to void sale');
+    throw new Error(`Failed to void sale: ${error}`);
   }
 }
 
@@ -324,5 +379,14 @@ export async function getCashDrawerEvents(warehouseId?: string) {
     return JSON.parse(JSON.stringify(events));
   } catch (error) {
     throw new Error('Failed to get cash drawer events');
+  }
+}
+
+export async function getCurrentCashierName(): Promise<string> {
+  try {
+    const user = await currentUser();
+    return user?.fullName || user?.name as string || 'Cashier';
+  } catch {
+    return 'Cashier';
   }
 }

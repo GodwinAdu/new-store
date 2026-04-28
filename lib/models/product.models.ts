@@ -20,6 +20,12 @@ const ProductSchema = new Schema({
         ref: "Unit",
         default: null,
     }],
+    // Smart Defaults for Quick Add
+    defaultCost: { type: Number, default: 0 },
+    defaultMargin: { type: Number, default: 30 },
+    defaultSupplier: { type: Schema.Types.ObjectId, ref: "Supplier", default: null },
+    reorderPoint: { type: Number, default: 10 },
+    reorderQuantity: { type: Number, default: 50 },
     isActive: {
         type: Boolean,
         default: true,

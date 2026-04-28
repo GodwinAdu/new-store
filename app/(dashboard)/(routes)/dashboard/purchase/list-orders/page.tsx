@@ -319,7 +319,7 @@ export default function ListPurchaseOrders() {
                                 {selectedPurchase.items.map((item, index) => (
                                   <div key={index} className="flex justify-between p-2 bg-gray-50 rounded">
                                     <span>{item.product.name} ({item.product.sku})</span>
-                                    <span>{item.quantity} × ${item.unitCost.toFixed(2)} = ${item.totalCost.toFixed(2)}</span>
+                                    <span>{item.quantity} × ${(item.unitCost || 0).toFixed(2)} = ${(item.totalCost || 0).toFixed(2)}</span>
                                   </div>
                                 ))}
                               </div>

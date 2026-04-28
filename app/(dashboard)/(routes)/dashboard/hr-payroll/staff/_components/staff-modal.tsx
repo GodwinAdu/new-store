@@ -3,9 +3,10 @@
 import * as z from 'zod';
 import { useState, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { Plus, Trash2 } from 'lucide-react';
 
 import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,7 @@ import { createStaff, updateStaff, getDepartments, getRoles } from '@/lib/action
 import { StaffColumn } from './columns';
 
 const formSchema = z.object({
+  username: z.string().min(3, 'Username must be at least 3 characters').optional(),
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   phoneNumber: z.string().optional(),
@@ -45,6 +47,12 @@ const formSchema = z.object({
   workLocation: z.enum(['on-site', 'remote', 'hybrid']).optional(),
   bio: z.string().optional(),
   isActive: z.boolean().default(true),
+  availableAllSchedule: z.boolean().default(false),
+  workSchedule: z.array(z.object({
+    day: z.enum(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']),
+    startTime: z.string(),
+    endTime: z.string(),
+  })).optional(),
   street: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
@@ -82,14 +90,17 @@ export const StaffModal: React.FC<StaffModalProps> = ({
 
   const defaultValues = initialData
     ? {
+        username: initialData.username || '',
         fullName: initialData.fullName,
         email: initialData.email,
         phoneNumber: initialData.phoneNumber || '',
         emergencyNumber: initialData.emergencyNumber || '',
         role: initialData.role,
-        departmentId: '', // Will be set when departments load
+        departmentId: '',
         jobTitle: initialData.jobTitle || '',
         isActive: initialData.isActive,
+        availableAllSchedule: initialData.availableAllSchedule || false,
+        workSchedule: initialData.workSchedule || [],
         gender: initialData.gender || 'prefer-not-to-say' as const,
         dob: initialData.dob ? new Date(initialData.dob).toISOString().split('T')[0] : '',
         startDate: initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : '',
@@ -107,6 +118,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
         accountType: initialData.accountDetails?.accountType || '',
       }
     : {
+        username: '',
         fullName: '',
         email: '',
         phoneNumber: '',
@@ -116,6 +128,8 @@ export const StaffModal: React.FC<StaffModalProps> = ({
         jobTitle: '',
         password: '',
         isActive: true,
+        availableAllSchedule: false,
+        workSchedule: [],
         gender: 'prefer-not-to-say' as const,
         dob: '',
         startDate: '',
@@ -136,6 +150,11 @@ export const StaffModal: React.FC<StaffModalProps> = ({
   const form = useForm<StaffFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues,
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: 'workSchedule',
   });
 
   useEffect(() => {
@@ -162,6 +181,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
       setLoading(true);
       
       const staffData = {
+        username: data.username,
         fullName: data.fullName,
         email: data.email,
         phoneNumber: data.phoneNumber,
@@ -175,6 +195,8 @@ export const StaffModal: React.FC<StaffModalProps> = ({
         workLocation: data.workLocation,
         bio: data.bio,
         isActive: data.isActive,
+        availableAllSchedule: data.availableAllSchedule,
+        workSchedule: data.workSchedule || [],
         address: {
           street: data.street,
           city: data.city,
@@ -225,6 +247,19 @@ export const StaffModal: React.FC<StaffModalProps> = ({
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="username"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Username</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="johndoe" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={form.control}
                     name="fullName"
@@ -426,7 +461,175 @@ export const StaffModal: React.FC<StaffModalProps> = ({
                   />
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <h3 className="text-sm font-medium mt-6 mb-4">Work Schedule</h3>
+                <FormField
+                  control={form.control}
+                  name="availableAllSchedule"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-4">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Available All Schedule</FormLabel>
+                        <p className="text-xs text-muted-foreground">Staff is available for all shifts</p>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+                
+                {!form.watch('availableAllSchedule') && (
+                  <div className="space-y-4">
+                    {fields.map((field, index) => (
+                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <FormField
+                          control={form.control}
+                          name={`workSchedule.${index}.day`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Day</FormLabel>
+                              <Select disabled={loading} onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select day" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Monday">Monday</SelectItem>
+                                  <SelectItem value="Tuesday">Tuesday</SelectItem>
+                                  <SelectItem value="Wednesday">Wednesday</SelectItem>
+                                  <SelectItem value="Thursday">Thursday</SelectItem>
+                                  <SelectItem value="Friday">Friday</SelectItem>
+                                  <SelectItem value="Saturday">Saturday</SelectItem>
+                                  <SelectItem value="Sunday">Sunday</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`workSchedule.${index}.startTime`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Start Time</FormLabel>
+                              <FormControl>
+                                <Input type="time" disabled={loading} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`workSchedule.${index}.endTime`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>End Time</FormLabel>
+                              <FormControl>
+                                <Input type="time" disabled={loading} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => remove(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => append({ day: 'Monday', startTime: '09:00', endTime: '17:00' })}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Schedule
+                    </Button>
+                  </div>
+                )}
+                
+                <h3 className="text-sm font-medium mt-6 mb-4">Address Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="street"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Street Address</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="123 Main St" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>City</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="Accra" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="state"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>State/Region</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="Greater Accra" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="Ghana" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="zipCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Zip/Postal Code</FormLabel>
+                        <FormControl>
+                          <Input disabled={loading} placeholder="00233" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <h3 className="text-sm font-medium mt-6 mb-4">Identification & Banking</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="idCardType"

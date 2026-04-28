@@ -86,6 +86,61 @@ async function _fetchAllUnits(user: User) {
 }
 
 
+async function _updateUnit(user: User, id: string, values: { 
+    name: string, 
+    shortName?: string,
+    isActive: boolean, 
+    unitType: "base" | "derived",
+    baseUnit?: string,
+    conversionFactor?: number 
+}) {
+    try {
+        if (!user) throw new Error("User not authorized")
+
+        await connectToDB()
+
+        const unit = await Unit.findById(id)
+        if (!unit) throw new Error("Unit not found")
+
+        // Validate derived unit requirements
+        if (values.unitType === "derived" && (!values.baseUnit || !values.conversionFactor)) {
+            throw new Error("Derived units must have a base unit and conversion factor");
+        }
+
+        const updatedUnit = await Unit.findByIdAndUpdate(
+            id,
+            {
+                name: values.name,
+                shortName: values.shortName,
+                isActive: values.isActive,
+                unitType: values.unitType,
+                baseUnit: values.unitType === "derived" ? values.baseUnit : undefined,
+                conversionFactor: values.conversionFactor || 1,
+            },
+            { new: true }
+        )
+
+        const history = new History({
+            actionType: 'UNIT_UPDATED',
+            details: {
+                unitId: id,
+                updatedBy: user._id,
+            },
+            message: `${user.fullName} updated unit (ID: ${id}) on ${new Date().toLocaleString()}.`,
+            performedBy: user._id,
+            entityId: id,
+            entityType: 'UNIT'
+        });
+
+        await history.save()
+
+        return JSON.parse(JSON.stringify(updatedUnit))
+    } catch (error) {
+        console.log("error while updating unit", error);
+        throw error
+    }
+}
+
 async function _deleteUnit(user: User, id: string) {
     try {
         if (!user) throw new Error("User not authenticated")
@@ -177,8 +232,27 @@ async function _seedBaseUnits(user: User) {
     }
 }
 
+async function _fetchUnitById(user: User, id: string) {
+    try {
+        if (!user) throw new Error("User not authorized")
+
+        await connectToDB()
+
+        const unit = await Unit.findById(id).populate("baseUnit")
+
+        if (!unit) throw new Error("Unit not found")
+
+        return JSON.parse(JSON.stringify(unit))
+    } catch (error) {
+        console.log("error while fetching unit", error);
+        throw error;
+    }
+}
+
 export const createUnit = await withAuth(_createUnit)
 export const fetchAllUnits = await withAuth(_fetchAllUnits)
 export const fetchBaseUnits = await withAuth(_fetchBaseUnits)
 export const seedBaseUnits = await withAuth(_seedBaseUnits)
+export const updateUnit = await withAuth(_updateUnit)
+export const fetchUnitById = await withAuth(_fetchUnitById)
 export const deleteUnit = await withAuth(_deleteUnit)

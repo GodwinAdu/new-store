@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import QuickAddStock from "./quick-add-stock"
+import BulkImportStock from "./bulk-import-stock"
 import { receiveShipment } from "@/lib/actions/transport.actions"
 import { toast } from "sonner"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
@@ -45,6 +47,8 @@ export default function ReceiveStockClient({ products, warehouses, shipments }: 
   const [receivedItems, setReceivedItems] = useState<any[]>([])
   const [defaultProfitMargin, setDefaultProfitMargin] = useState(30)
   const [showManualPricing, setShowManualPricing] = useState(false)
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
   const [manualPricingForm, setManualPricingForm] = useState({
     warehouseId: '',
     productId: '',
@@ -131,8 +135,8 @@ export default function ReceiveStockClient({ products, warehouses, shipments }: 
     }
     
     try {
-      // Create a manual stock entry (you'll need to implement this action)
-      // await addManualStock(manualPricingForm)
+      const { addManualStock } = await import('@/lib/actions/warehouse.actions')
+      await addManualStock(manualPricingForm)
       toast.success('Stock received successfully')
       
       // Reset form
@@ -148,6 +152,7 @@ export default function ReceiveStockClient({ products, warehouses, shipments }: 
         notes: ''
       })
       setShowManualPricing(false)
+      window.location.reload()
     } catch (error) {
       toast.error('Failed to receive stock')
       console.error('Error receiving stock:', error)
@@ -213,11 +218,15 @@ export default function ReceiveStockClient({ products, warehouses, shipments }: 
             <p className="text-muted-foreground">Process incoming shipments and update inventory</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline">
+            <Button onClick={() => setShowQuickAdd(true)} variant="default">
               <Scan className="h-4 w-4 mr-2" />
-              Scan Barcode
+              Quick Add
             </Button>
-            <Button onClick={() => setShowManualPricing(true)}>
+            <Button onClick={() => setShowBulkImport(true)} variant="outline">
+              <Package className="h-4 w-4 mr-2" />
+              Bulk Import
+            </Button>
+            <Button onClick={() => setShowManualPricing(true)} variant="outline">
               <Package className="h-4 w-4 mr-2" />
               Manual Pricing
             </Button>
@@ -920,6 +929,21 @@ export default function ReceiveStockClient({ products, warehouses, shipments }: 
           </div>
         </DialogContent>
       </Dialog>
+
+      <QuickAddStock
+        open={showQuickAdd}
+        onOpenChange={setShowQuickAdd}
+        warehouses={warehouses}
+        products={products}
+        onSuccess={() => window.location.reload()}
+      />
+
+      <BulkImportStock
+        open={showBulkImport}
+        onOpenChange={setShowBulkImport}
+        warehouses={warehouses}
+        onSuccess={() => window.location.reload()}
+      />
     </SidebarInset>
   )
 }

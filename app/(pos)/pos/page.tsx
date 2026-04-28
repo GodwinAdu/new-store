@@ -1,50 +1,28 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { POSLayout } from '@/components/pos/pos-layout'
-import { VoiceAssistant } from '@/components/pos/voice-assistant'
-import { VoiceSearch } from '@/components/pos/voice-search'
-import { VoiceSettings } from '@/components/pos/voice-settings'
-import { getProducts, processSale, getTodayStats } from '@/lib/actions/pos.actions'
+import { ProductGrid } from '@/components/pos/product-grid'
+import { OrderPanel } from '@/components/pos/order-panel'
+import { PaymentModal } from '@/components/pos/payment-modal'
+import { ReceiptPreview } from '@/components/pos/receipt-preview'
+import { processSale, getCurrentCashierName } from '@/lib/actions/pos.actions'
 import { getCustomers, updateCustomerPoints } from '@/lib/actions/customer.actions'
 import { fetchAllWarehouses } from '@/lib/actions/warehouse.actions'
 import { getWarehouseProducts } from '@/lib/actions/warehouse.actions'
 import { usePOSStore } from '@/lib/store/pos-store'
-import { useVoice } from '@/hooks/use-voice'
+import { buildReceiptData, type ReceiptData } from '@/lib/utils/receipt-utils'
 import { 
-  ShoppingCart, 
-  Search, 
-  CreditCard, 
-  Banknote, 
-  Smartphone,
-  Calculator,
-  Trash2,
-  Plus,
-  Minus,
   Package,
-  Zap,
-  Gift,
-  Percent,
-  User,
-  QrCode,
-  Save,
   History,
   AlertCircle,
-  CheckCircle,
-  Timer,
-  Sparkles,
   Printer,
   Receipt,
-  X
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -54,6 +32,7 @@ interface Product {
   price: number
   category: string
   stock: number
+  minStock?: number
   barcode?: string
   sku?: string
   isPopular?: boolean
@@ -100,42 +79,58 @@ function POSContent() {
     getDiscountAmount,
     getTaxAmount,
     getTotal,
-    getChange
+    getChange,
+    addLowStockAlert,
   } = usePOSStore()
   
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [showUnitDialog, setShowUnitDialog] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<string[]>(['All'])
   const [customers, setCustomers] = useState<Customer[]>([])
   const [warehouses, setWarehouses] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [lastSale, setLastSale] = useState<any>(null)
-  const [voiceSearchTerm, setVoiceSearchTerm] = useState('')
-  const { speak } = useVoice()
+  const [hydrated, setHydrated] = useState(false)
+  const [cashierName, setCashierName] = useState('Cashier')
+
+  // PaymentModal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
+
+  // ReceiptPreview state
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
+
+  // Dialog states for quick actions
+  const [calculatorOpen, setCalculatorOpen] = useState(false)
+  const [noSaleOpen, setNoSaleOpen] = useState(false)
+  const [lastReceiptOpen, setLastReceiptOpen] = useState(false)
+
 
   useEffect(() => {
-    const { voiceManager } = require('@/lib/voice-manager')
-    return voiceManager.onCommand(handleVoiceCommand)
+    setHydrated(true)
   }, [])
 
-  const categories = ['All', 'Beverages', 'Food', 'Bakery', 'Snacks']
+  useEffect(() => {
+    if (hydrated) {
+      loadData()
+    }
+  }, [hydrated])
 
   useEffect(() => {
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    loadProducts()
-  }, [selectedCategory, searchTerm, selectedWarehouse])
+    if (selectedWarehouse) {
+      loadProducts()
+    }
+  }, [selectedWarehouse])
 
   const loadData = async () => {
     try {
-      const [warehousesData, customersData] = await Promise.all([
+      const [warehousesData, customersData, fetchedCashierName] = await Promise.all([
         fetchAllWarehouses(),
-        getCustomers()
+        getCustomers(),
+        getCurrentCashierName(),
       ])
       
       if (!warehousesData || warehousesData.length === 0) {
@@ -145,11 +140,10 @@ function POSContent() {
       
       setWarehouses(warehousesData)
       setCustomers(customersData || [])
+      setCashierName(fetchedCashierName)
       
-      // Set first warehouse as default
-      if (warehousesData.length > 0 && !selectedWarehouse) {
+      if (!selectedWarehouse) {
         setSelectedWarehouse(warehousesData[0])
-        toast.success(`Connected to ${warehousesData[0].name}`)
       }
     } catch (error) {
       console.error('Load data error:', error)
@@ -171,34 +165,25 @@ function POSContent() {
       if (!productsData || productsData.length === 0) {
         toast.error(`No products found in ${selectedWarehouse.name}. Please add products first.`)
         setProducts([])
+        setAllProducts([])
+        setCategories(['All'])
         return
       }
       
-      // Filter by category and search term
-      let filteredProducts = productsData
-      
-      if (selectedCategory !== 'All') {
-        filteredProducts = filteredProducts.filter(p => p.category === selectedCategory)
-      }
-      
-      if (searchTerm) {
-        filteredProducts = filteredProducts.filter(p => 
-          p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-        
-        if (filteredProducts.length === 0) {
-          toast.error(`No products found matching "${searchTerm}"`)
-        }
-      }
-      
-      setProducts(filteredProducts.map(p => ({
+      const mapped = productsData.map(p => ({
         ...p,
         id: p._id,
         stock: p.totalStock || 0,
+        minStock: p.minStock,
         category: p.category || 'General',
         units: p.units || []
-      })))
+      }))
+
+      // Derive real categories from the product list
+      const uniqueCategories = ['All', ...Array.from(new Set(mapped.map(p => p.category))).sort()]
+
+      setProducts(mapped)
+      setCategories(uniqueCategories)
       
     } catch (error) {
       console.error('Load products error:', error)
@@ -238,20 +223,13 @@ function POSContent() {
       addToCart(product, unit, quantity)
       const unitName = unit ? unit.name : 'unit'
       toast.success(`${product.name} (${unitName}) added to cart`)
-      speak(`Added ${product.name} to cart`)
     } catch (error) {
       toast.error('Failed to add item to cart. Please try again.')
     }
   }
 
-  const handleProductClick = (product: Product) => {
-    console.log('Product clicked:', product.name, 'Units:', product.units)
-    if (product.units && product.units.length > 0) {
-      setSelectedProduct(product)
-      setShowUnitDialog(true)
-    } else {
-      handleAddToCart(product)
-    }
+  const handleProductClick = (product: Product, unit?: any) => {
+    handleAddToCart(product, unit)
   }
 
 
@@ -286,6 +264,7 @@ function POSContent() {
     }
 
     setIsProcessing(true)
+    setPaymentError(null)
     
     try {
       const saleData = {
@@ -306,7 +285,24 @@ function POSContent() {
       
       const sale = await processSale(saleData)
       setLastSale(sale)
-      
+
+      // --- Task 11.4: Low-stock alerts ---
+      const cartSnapshot = [...cart]
+      for (const item of cartSnapshot) {
+        const remainingStock = item.stock - item.quantity
+        const threshold = item.minStock ?? 0
+        if (remainingStock <= threshold) {
+          addLowStockAlert({
+            productId: item.id,
+            productName: item.name,
+            currentStock: remainingStock,
+            minStock: threshold,
+            timestamp: Date.now(),
+          })
+        }
+      }
+
+      // --- Task 11.5: Award loyalty points ---
       if (selectedCustomer) {
         try {
           const pointsEarned = Math.floor(total)
@@ -318,235 +314,48 @@ function POSContent() {
       } else {
         toast.success('Payment processed successfully!')
       }
-      
-      speak('Payment successful')
-      printReceipt()
+
+      // --- Task 11.2 / 11.3: Close PaymentModal, open ReceiptPreview ---
+      const builtReceipt = buildReceiptData(
+        sale,
+        cartSnapshot,
+        selectedCustomer,
+        { name: selectedWarehouse.name, location: selectedWarehouse.location },
+        { name: cashierName }
+      )
+      setReceiptData(builtReceipt)
+      setPaymentModalOpen(false)
+      setReceiptOpen(true)
+
       clearCart()
       loadProducts()
     } catch (error) {
       console.error('Payment processing error:', error)
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      toast.error(`Payment failed: ${errorMessage}. Please try again or contact support.`)
+      setPaymentError(`Payment failed: ${errorMessage}`)
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const printReceipt = () => {
-    const receiptData = {
-      receiptNumber: `RCP-${Date.now()}`,
-      items: cart,
-      subtotal,
-      discount: discountAmount,
-      tax: taxAmount,
-      total,
-      paymentMethod,
-      cashReceived: paymentMethod === 'cash' ? parseFloat(cashReceived) : total,
-      change,
-      customer: selectedCustomer,
-      warehouse: selectedWarehouse,
-      timestamp: new Date().toISOString(),
-      cashier: 'Admin'
+  // Opens the PaymentModal (called by OrderPanel's Charge button)
+  const handleCharge = () => {
+    if (cart.length === 0) {
+      toast.error('Cart is empty. Please add items first.')
+      return
     }
-    
-    // Create receipt window
-    const receiptWindow = window.open('', '_blank', 'width=400,height=600')
-    if (receiptWindow) {
-      receiptWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Receipt</title>
-          <style>
-            body { font-family: 'Courier New', monospace; margin: 0; padding: 20px; background: white; }
-            .receipt { max-width: 300px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .header h1 { margin: 0; font-size: 18px; }
-            .header p { margin: 2px 0; font-size: 12px; color: #666; }
-            .divider { border-top: 1px dashed #999; margin: 10px 0; }
-            .row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 12px; }
-            .item { margin-bottom: 8px; }
-            .item-name { font-weight: bold; }
-            .item-details { font-size: 11px; color: #666; margin-left: 10px; }
-            .total-row { font-weight: bold; font-size: 14px; }
-            .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #666; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="receipt">
-            <div class="header">
-              <h1>MODERN POS</h1>
-              <p>${receiptData.warehouse?.name || 'Main Store'}</p>
-              <p>${receiptData.warehouse?.location || 'Location'}</p>
-            </div>
-            <div class="divider"></div>
-            <div class="row"><span>Receipt #:</span><span>${receiptData.receiptNumber}</span></div>
-            <div class="row"><span>Date:</span><span>${new Date(receiptData.timestamp).toLocaleString()}</span></div>
-            ${receiptData.customer ? `<div class="row"><span>Customer:</span><span>${receiptData.customer.name}</span></div>` : ''}
-            <div class="row"><span>Cashier:</span><span>${receiptData.cashier}</span></div>
-            <div class="divider"></div>
-            ${receiptData.items.map(item => `
-              <div class="item">
-                <div class="row">
-                  <span class="item-name">${item.name}</span>
-                  <span>₵${(item.unitPrice * item.quantity).toFixed(2)}</span>
-                </div>
-                <div class="item-details">
-                  ${item.quantity} x ₵${item.unitPrice.toFixed(2)}${item.selectedUnit ? ` (${item.selectedUnit.name})` : ''}
-                </div>
-              </div>
-            `).join('')}
-            <div class="divider"></div>
-            <div class="row"><span>Subtotal:</span><span>₵${receiptData.subtotal.toFixed(2)}</span></div>
-            ${receiptData.discount > 0 ? `<div class="row" style="color: green;"><span>Discount:</span><span>-₵${receiptData.discount.toFixed(2)}</span></div>` : ''}
-            ${receiptData.tax > 0 ? `<div class="row"><span>Tax:</span><span>₵${receiptData.tax.toFixed(2)}</span></div>` : ''}
-            <div class="divider"></div>
-            <div class="row total-row"><span>TOTAL:</span><span>₵${receiptData.total.toFixed(2)}</span></div>
-            <div class="divider"></div>
-            <div class="row"><span>Payment:</span><span>${receiptData.paymentMethod.toUpperCase()}</span></div>
-            ${receiptData.paymentMethod === 'cash' ? `
-              <div class="row"><span>Cash Received:</span><span>₵${receiptData.cashReceived.toFixed(2)}</span></div>
-              <div class="row"><span>Change:</span><span>₵${receiptData.change.toFixed(2)}</span></div>
-            ` : ''}
-            <div class="footer">
-              <div class="divider"></div>
-              <p>Thank you for your business!</p>
-              <p>Visit us again soon</p>
-              ${receiptData.customer?.loyaltyPoints ? `<p>Loyalty Points: ${receiptData.customer.loyaltyPoints}</p>` : ''}
-              <p style="margin-top: 15px;">★ ★ ★ ★ ★</p>
-              <p>Powered by Modern POS</p>
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => window.close(), 1000);
-            }
-          </script>
-        </body>
-        </html>
-      `)
-      receiptWindow.document.close()
+    if (!selectedWarehouse) {
+      toast.error('Please select a warehouse first.')
+      return
     }
-    
-    toast.success('Receipt printed!')
+    setPaymentError(null)
+    setPaymentModalOpen(true)
   }
 
-  const handleReprintReceipt = () => {
-    if (lastSale) {
-      printSaleReceipt(lastSale)
-      toast.success('Receipt reprinted!')
-    } else {
-      toast.error('No recent sale to reprint')
-    }
-  }
-
-  const printSaleReceipt = (saleData: any) => {
-    const calculatedSubtotal = saleData.items?.reduce((sum: number, item: any) => 
-      sum + (item.quantity * item.unitPrice), 0) || 0
-    
-    const receiptData = {
-      receiptNumber: `RCP-${saleData._id?.slice(-6) || Date.now()}`,
-      items: saleData.items?.map((item: any) => ({
-        name: item.product?.name || 'Unknown Product',
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        selectedUnit: null
-      })) || [],
-      subtotal: saleData.subtotal || calculatedSubtotal,
-      discount: saleData.discount || 0,
-      tax: saleData.tax || 0,
-      total: saleData.total || calculatedSubtotal,
-      paymentMethod: saleData.paymentMethod || 'cash',
-      cashReceived: saleData.cashReceived || saleData.total || calculatedSubtotal,
-      change: (saleData.cashReceived || saleData.total || calculatedSubtotal) - (saleData.total || calculatedSubtotal),
-      customer: null,
-      warehouse: selectedWarehouse,
-      timestamp: saleData.saleDate || new Date().toISOString(),
-      cashier: saleData.cashier?.name || 'Admin'
-    }
-    
-    // Create receipt window
-    const receiptWindow = window.open('', '_blank', 'width=400,height=600')
-    if (receiptWindow) {
-      receiptWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Receipt</title>
-          <style>
-            body { font-family: 'Courier New', monospace; margin: 0; padding: 20px; background: white; }
-            .receipt { max-width: 300px; margin: 0 auto; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .header h1 { margin: 0; font-size: 18px; }
-            .header p { margin: 2px 0; font-size: 12px; color: #666; }
-            .divider { border-top: 1px dashed #999; margin: 10px 0; }
-            .row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 12px; }
-            .item { margin-bottom: 8px; }
-            .item-name { font-weight: bold; }
-            .item-details { font-size: 11px; color: #666; margin-left: 10px; }
-            .total-row { font-weight: bold; font-size: 14px; }
-            .footer { text-align: center; margin-top: 20px; font-size: 11px; color: #666; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="receipt">
-            <div class="header">
-              <h1>MODERN POS</h1>
-              <p>${receiptData.warehouse?.name || 'Main Store'}</p>
-              <p>${receiptData.warehouse?.location || 'Location'}</p>
-            </div>
-            <div class="divider"></div>
-            <div class="row"><span>Receipt #:</span><span>${receiptData.receiptNumber}</span></div>
-            <div class="row"><span>Date:</span><span>${new Date(receiptData.timestamp).toLocaleString()}</span></div>
-            <div class="row"><span>Cashier:</span><span>${receiptData.cashier}</span></div>
-            <div class="divider"></div>
-            ${receiptData.items.map(item => `
-              <div class="item">
-                <div class="row">
-                  <span class="item-name">${item.name}</span>
-                  <span>₵${(item.unitPrice * item.quantity).toFixed(2)}</span>
-                </div>
-                <div class="item-details">
-                  ${item.quantity} x ₵${item.unitPrice.toFixed(2)}
-                </div>
-              </div>
-            `).join('')}
-            <div class="divider"></div>
-            <div class="row"><span>Subtotal:</span><span>₵${receiptData.subtotal.toFixed(2)}</span></div>
-            ${receiptData.discount > 0 ? `<div class="row" style="color: green;"><span>Discount:</span><span>-₵${receiptData.discount.toFixed(2)}</span></div>` : ''}
-            ${receiptData.tax > 0 ? `<div class="row"><span>Tax:</span><span>₵${receiptData.tax.toFixed(2)}</span></div>` : ''}
-            <div class="divider"></div>
-            <div class="row total-row"><span>TOTAL:</span><span>₵${receiptData.total.toFixed(2)}</span></div>
-            <div class="divider"></div>
-            <div class="row"><span>Payment:</span><span>${receiptData.paymentMethod.toUpperCase()}</span></div>
-            ${receiptData.paymentMethod === 'cash' ? `
-              <div class="row"><span>Cash Received:</span><span>₵${receiptData.cashReceived.toFixed(2)}</span></div>
-              <div class="row"><span>Change:</span><span>₵${receiptData.change.toFixed(2)}</span></div>
-            ` : ''}
-            <div class="footer">
-              <div class="divider"></div>
-              <p>Thank you for your business!</p>
-              <p>Visit us again soon</p>
-              <p style="margin-top: 15px;">★ ★ ★ ★ ★</p>
-              <p>Powered by Modern POS</p>
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => window.close(), 1000);
-            }
-          </script>
-        </body>
-        </html>
-      `)
-      receiptWindow.document.close()
-    }
-    
-    toast.success('Receipt printed!')
+  // Opens ReceiptPreview for reprinting (used by ConsolidatedSalesTab and Last Receipt)
+  const handleReprintReceipt = (data: ReceiptData) => {
+    setReceiptData(data)
+    setReceiptOpen(true)
   }
 
   const handleNoSale = async () => {
@@ -554,67 +363,61 @@ function POSContent() {
       const { recordNoSale } = await import('@/lib/actions/pos.actions')
       await recordNoSale('Manual cash drawer opening', selectedWarehouse?._id)
       toast.success('Cash drawer opened - Event recorded')
+      setNoSaleOpen(false)
     } catch (error) {
       toast.error('Failed to record no sale event')
     }
   }
 
-  const handleVoiceCommand = (command: string, params?: any) => {
-    switch (command) {
-      case 'ADD_PRODUCT':
-        if (params?.name) {
-          const product = products.find(p => 
-            p.name.toLowerCase().includes(params.name.toLowerCase())
-          )
-          if (product) {
-            handleAddToCart(product)
-            speak(`Added ${product.name} to cart`)
-          } else {
-            speak(`Product ${params.name} not found`)
-          }
-        }
-        break
-        
-      case 'SEARCH':
-        if (params?.term) {
-          setSearchTerm(params.term)
-          speak(`Searching for ${params.term}`)
-        }
-        break
-        
-      case 'PROCESS_PAYMENT':
-        if (cart.length > 0) {
-          processPayment()
-        } else {
-          speak('Cart is empty')
-        }
-        break
-        
-      case 'SET_CASH_PAYMENT':
-        setPaymentMethod('cash')
-        speak('Payment method set to cash')
-        break
-        
-      case 'SET_CARD_PAYMENT':
-        setPaymentMethod('card')
-        speak('Payment method set to card')
-        break
-        
-      case 'PRINT_RECEIPT':
-        if (lastSale) {
-          printSaleReceipt(lastSale)
-          speak('Receipt printed')
-        } else {
-          speak('No recent sale to print')
-        }
-        break
-        
-      case 'CLEAR_CART':
-        clearCart()
-        speak('Cart cleared')
-        break
+  // Last Receipt: open ReceiptPreview with the most recent sale
+  const handleLastReceipt = async () => {
+    if (receiptData) {
+      // Already have receipt data from the last sale in this session
+      setReceiptOpen(true)
+      return
+    }
+    // Try to fetch the most recent sale from today
+    try {
+      const { getTodaySales } = await import('@/lib/actions/pos.actions')
+      const sales = await getTodaySales()
+      if (!sales || sales.length === 0) {
+        toast.error('No recent sale to reprint')
+        return
+      }
+      const latest = sales[0]
+      const items = latest.items?.map((item: any) => ({
+        name: item.product?.name || 'Unknown Product',
+        unitLabel: undefined,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.unitPrice * item.quantity,
+      })) || []
+      const builtReceipt: ReceiptData = {
+        receiptNumber: latest._id.slice(-8).toUpperCase(),
+        storeName: 'Modern POS',
+        warehouseName: selectedWarehouse?.name || '',
+        warehouseLocation: selectedWarehouse?.location || '',
+        cashierName: latest.cashier?.name || 'Admin',
+        timestamp: latest.saleDate || new Date().toISOString(),
+        items,
+        subtotal: latest.subtotal || 0,
+        discount: latest.discount || 0,
+        tax: latest.tax || 0,
+        total: latest.total || 0,
+        paymentMethod: (latest.paymentMethod as 'cash' | 'card' | 'mobile') || 'cash',
+        cashReceived: latest.cashReceived,
+        change: latest.paymentMethod === 'cash' && latest.cashReceived != null
+          ? Math.max(0, latest.cashReceived - latest.total)
+          : undefined,
+      }
+      setReceiptData(builtReceipt)
+      setReceiptOpen(true)
+    } catch (error) {
+      toast.error('No recent sale to reprint')
     }
   }
+
+
 
   // Dialog Components
   const LastSaleDialog = () => {
@@ -719,7 +522,32 @@ function POSContent() {
 
         <Button 
           onClick={() => {
-            printSaleReceipt(lastSaleData)
+            const items = lastSaleData.items?.map((item: any) => ({
+              name: item.product?.name || 'Unknown Product',
+              unitLabel: undefined,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              lineTotal: item.unitPrice * item.quantity,
+            })) || []
+            const builtReceipt: ReceiptData = {
+              receiptNumber: lastSaleData._id.slice(-8).toUpperCase(),
+              storeName: 'Modern POS',
+              warehouseName: selectedWarehouse?.name || '',
+              warehouseLocation: selectedWarehouse?.location || '',
+              cashierName: lastSaleData.cashier?.name || 'Admin',
+              timestamp: lastSaleData.saleDate || new Date().toISOString(),
+              items,
+              subtotal: lastSaleData.subtotal || 0,
+              discount: lastSaleData.discount || 0,
+              tax: lastSaleData.tax || 0,
+              total: lastSaleData.total || 0,
+              paymentMethod: (lastSaleData.paymentMethod as 'cash' | 'card' | 'mobile') || 'cash',
+              cashReceived: lastSaleData.cashReceived,
+              change: lastSaleData.paymentMethod === 'cash' && lastSaleData.cashReceived != null
+                ? Math.max(0, lastSaleData.cashReceived - lastSaleData.total)
+                : undefined,
+            }
+            handleReprintReceipt(builtReceipt)
           }}
           className="w-full"
         >
@@ -977,10 +805,16 @@ function POSContent() {
   }
 
   return (
-    <POSLayout>
+    <POSLayout
+      onReprintReceipt={handleReprintReceipt}
+      onCalculator={() => setCalculatorOpen(true)}
+      onNoSale={() => setNoSaleOpen(true)}
+      onLastReceipt={handleLastReceipt}
+      cashierName={cashierName}
+    >
       <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-4">
         <div className="flex-1 flex flex-col space-y-4">
-          <div className="flex items-center justify-between p-4 bg-white rounded-lg border">
+          <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded-lg border dark:border-gray-700">
             <div className="flex items-center space-x-3">
               <div className="bg-primary/10 p-2 rounded-lg">
                 <Package className="h-5 w-5 text-primary" />
@@ -1012,524 +846,99 @@ function POSContent() {
             </Select>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 p-4 bg-white rounded-lg border">
-            <div className="flex-1">
-              <VoiceSearch
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                onProductSelect={(productName) => {
-                  const product = products.find(p => 
-                    p.name.toLowerCase().includes(productName.toLowerCase())
-                  )
-                  if (product) {
-                    handleProductClick(product)
-                    setSearchTerm('')
-                  } else {
-                    toast.error(`Product "${productName}" not found`)
-                  }
-                }}
-                placeholder="Search products, scan barcode, or use voice..."
-              />
-            </div>
-            <Button variant="outline" size="sm" className="h-10">
-              <QrCode className="h-4 w-4 mr-2" />
-              Scan
-            </Button>
-            <VoiceSettings />
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-32 h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto p-4 bg-gray-50 rounded-lg">
-              {loading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                    <p className="mt-2 text-muted-foreground">Loading products...</p>
-                  </div>
-                </div>
-              ) : products.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-12">
-                  <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-6 mb-4">
-                    <Package className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-muted-foreground mb-2">
-                    {searchTerm ? 'No Products Found' : 'No Products Available'}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4 max-w-md">
-                    {searchTerm 
-                      ? `No products match "${searchTerm}". Try a different search term or clear the search.`
-                      : selectedWarehouse 
-                        ? `No products found in ${selectedWarehouse.name}. Add products to this warehouse to start selling.`
-                        : 'Select a warehouse to view available products.'
-                    }
-                  </p>
-                  <div className="flex gap-2">
-                    {searchTerm && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setSearchTerm('')}
-                      >
-                        Clear Search
-                      </Button>
-                    )}
-                    {selectedCategory !== 'All' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setSelectedCategory('All')}
-                      >
-                        Show All Categories
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                  {products.map(product => (
-                    <div 
-                      key={product.id} 
-                      className="bg-white rounded-lg p-3 cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02] border group"
-                      onClick={() => handleProductClick(product)}
-                    >
-                      <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-md mb-2 flex items-center justify-center relative">
-                        <Package className="h-6 w-6 text-muted-foreground group-hover:scale-110 transition-transform" />
-                        {product.stock <= 10 && (
-                          <Badge className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1 py-0">
-                            Low
-                          </Badge>
-                        )}
-                      </div>
-                      <h3 className="font-medium text-xs mb-1 line-clamp-2 h-8">{product.name}</h3>
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-primary">₵{product.price.toFixed(2)}</span>
-                          <span className="text-xs text-muted-foreground">{product.stock}</span>
-                        </div>
-                        {product.units && product.units.length > 0 && (
-                          <Badge variant="outline" className="text-xs w-full justify-center">
-                            {product.units.length} units
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="flex-1 overflow-hidden p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <ProductGrid
+              products={products}
+              loading={loading}
+              onAddProduct={handleProductClick}
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              categories={categories}
+            />
           </div>
         </div>
 
         <div className="w-full lg:w-96 flex flex-col space-y-4">
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold flex items-center">
-                <User className="h-4 w-4 mr-2" />
-                Customer
-              </h3>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Select Customer</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    {customers.map(customer => (
-                      <Card 
-                        key={customer._id || customer.id} 
-                        className="p-3 cursor-pointer hover:bg-accent"
-                        onClick={() => setSelectedCustomer({...customer, id: customer._id || customer.id})}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{customer.name}</p>
-                            <p className="text-sm text-muted-foreground">{customer.email}</p>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant="secondary">{customer.loyaltyPoints || 0} pts</Badge>
-                            <p className="text-xs text-muted-foreground">${customer.totalSpent?.toFixed(2) || '0.00'}</p>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </DialogContent>
-              </Dialog>
-            </div>
-            {selectedCustomer ? (
-              <div className="bg-accent/50 rounded-lg p-3">
-                <p className="font-medium">{selectedCustomer.name}</p>
-                <p className="text-sm text-muted-foreground">{selectedCustomer.email}</p>
-                <div className="flex items-center justify-between mt-2">
-                  <Badge variant="secondary">
-                    <Gift className="h-3 w-3 mr-1" />
-                    {selectedCustomer.loyaltyPoints || 0} points
-                  </Badge>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setSelectedCustomer(null)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-sm">No customer selected</p>
-            )}
-          </Card>
-
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold flex items-center">
-                <ShoppingCart className="h-4 w-4 mr-2" />
-                Cart ({cart.length})
-              </h3>
-              {cart.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearCart}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-
-            <ScrollArea className="h-64">
-              {cart.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">
-                  <ShoppingCart className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Cart is empty</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {cart.map((item, index) => (
-                    <div key={`${item.id}-${item.selectedUnit?._id || 'default'}`} className="flex items-center justify-between p-3 bg-accent/50 rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{item.name}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>₵{item.unitPrice.toFixed(2)}</span>
-                          {item.selectedUnit && (
-                            <Badge variant="secondary" className="text-xs">
-                              {item.selectedUnit.name}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => updateQuantity(index, item.quantity - 1)}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => updateQuantity(index, item.quantity + 1)}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <div className="text-right ml-4">
-                        <p className="font-semibold text-sm">₵{(item.unitPrice * item.quantity).toFixed(2)}</p>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => removeFromCart(index)}
-                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </Card>
-
-          {cart.length > 0 && (
-            <>
-              <Card className="p-4">
-                <h3 className="font-semibold mb-4 flex items-center">
-                  <Calculator className="h-4 w-4 mr-2" />
-                  Order Summary
-                </h3>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Percent className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <span>Discount</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        type="number"
-                        value={discount}
-                        onChange={(e) => setDiscount(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-                        className="w-16 h-8 text-center"
-                        min="0"
-                        max="100"
-                      />
-                      <span className="text-sm">%</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <Calculator className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <span>Tax</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Input
-                        type="number"
-                        value={tax}
-                        onChange={(e) => setTax(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
-                        className="w-16 h-8 text-center"
-                        min="0"
-                        max="100"
-                      />
-                      <span className="text-sm">%</span>
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Subtotal:</span>
-                      <span>${subtotal.toFixed(2)}</span>
-                    </div>
-                    {discount > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Discount ({discount}%):</span>
-                        <span>-${discountAmount.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>Tax ({tax}%):</span>
-                      <span>₵{taxAmount.toFixed(2)}</span>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between font-bold text-lg">
-                      <span>Total:</span>
-                      <span>${total.toFixed(2)}</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-4">
-                <h3 className="font-semibold mb-4">Payment Method</h3>
-                
-                <Tabs value={paymentMethod} onValueChange={(value: any) => setPaymentMethod(value)}>
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="cash" className="flex items-center">
-                      <Banknote className="h-4 w-4 mr-1" />
-                      Cash
-                    </TabsTrigger>
-                    <TabsTrigger value="card" className="flex items-center">
-                      <CreditCard className="h-4 w-4 mr-1" />
-                      Card
-                    </TabsTrigger>
-                    <TabsTrigger value="mobile" className="flex items-center">
-                      <Smartphone className="h-4 w-4 mr-1" />
-                      Mobile
-                    </TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="cash" className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium">Cash Received</label>
-                      <Input
-                        type="number"
-                        value={cashReceived}
-                        onChange={(e) => setCashReceived(e.target.value)}
-                        placeholder="0.00"
-                        className="mt-1"
-                      />
-                    </div>
-                    {cashReceived && parseFloat(cashReceived) >= total && (
-                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                        <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                          Change: ${change.toFixed(2)}
-                        </p>
-                      </div>
-                    )}
-                  </TabsContent>
-                  
-                  <TabsContent value="card">
-                    <div className="text-center py-4">
-                      <CreditCard className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Insert or tap card</p>
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="mobile">
-                    <div className="text-center py-4">
-                      <Smartphone className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Scan QR code or tap phone</p>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-
-                <div className="flex space-x-2 mt-4">
-                  <Button 
-                    className="flex-1" 
-                    size="lg"
-                    onClick={processPayment}
-                    disabled={isProcessing || (paymentMethod === 'cash' && parseFloat(cashReceived || '0') < total)}
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-4 w-4 mr-2" />
-                        Pay ${total.toFixed(2)}
-                      </>
-                    )}
-                  </Button>
-                  <Button variant="outline" size="lg">
-                    <Save className="h-4 w-4" />
-                  </Button>
-                </div>
-              </Card>
-            </>
-          )}
-
-          <VoiceAssistant onVoiceCommand={handleVoiceCommand} />
-
-          <Card className="p-4">
-            <h3 className="font-semibold mb-3">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="justify-start">
-                    <History className="h-4 w-4 mr-2" />
-                    Last Sale
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Last Sale Details</DialogTitle>
-                  </DialogHeader>
-                  <LastSaleDialog />
-                </DialogContent>
-              </Dialog>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="justify-start"
-                onClick={handleReprintReceipt}
-              >
-                <Printer className="h-4 w-4 mr-2" />
-                Reprint
-              </Button>
-              
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="justify-start">
-                    <Receipt className="h-4 w-4 mr-2" />
-                    No Sale
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>No Sale - Open Cash Drawer</DialogTitle>
-                  </DialogHeader>
-                  <NoSaleDialog onConfirm={handleNoSale} />
-                </DialogContent>
-              </Dialog>
-              
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="justify-start">
-                    <Calculator className="h-4 w-4 mr-2" />
-                    Calculator
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>Calculator</DialogTitle>
-                  </DialogHeader>
-                  <CalculatorDialog />
-                </DialogContent>
-              </Dialog>
-            </div>
-          </Card>
+          <OrderPanel
+            cart={cart}
+            selectedCustomer={selectedCustomer}
+            discount={discount}
+            tax={tax}
+            subtotal={subtotal}
+            discountAmount={discountAmount}
+            taxAmount={taxAmount}
+            total={total}
+            onUpdateQuantity={updateQuantity}
+            onRemoveItem={removeFromCart}
+            onClearCart={clearCart}
+            onSetDiscount={setDiscount}
+            onSetTax={setTax}
+            onSelectCustomer={setSelectedCustomer}
+            onCharge={handleCharge}
+            customers={customers}
+          />
         </div>
       </div>
 
-      {/* Unit Selection Dialog */}
-      <Dialog open={showUnitDialog} onOpenChange={setShowUnitDialog}>
-        <DialogContent className="max-w-md">
+      {/* PaymentModal — Task 11.2 */}
+      <PaymentModal
+        isOpen={paymentModalOpen}
+        onClose={() => {
+          if (!isProcessing) {
+            setPaymentModalOpen(false)
+            setPaymentError(null)
+          }
+        }}
+        total={total}
+        paymentMethod={paymentMethod}
+        cashReceived={cashReceived}
+        change={change}
+        isProcessing={isProcessing}
+        error={paymentError}
+        onPaymentMethodChange={setPaymentMethod}
+        onCashReceivedChange={setCashReceived}
+        onConfirm={processPayment}
+      />
+
+      {/* ReceiptPreview — Task 11.3 */}
+      <ReceiptPreview
+        isOpen={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        receiptData={receiptData}
+      />
+
+      {/* Calculator Dialog */}
+      <Dialog open={calculatorOpen} onOpenChange={setCalculatorOpen}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Select Unit - {selectedProduct?.name}</DialogTitle>
+            <DialogTitle>Calculator</DialogTitle>
           </DialogHeader>
-          
-          {selectedProduct && (
-            <div className="space-y-4">
-              <div className="grid gap-3">
-                {selectedProduct.units?.map((unit: any) => (
-                  <div 
-                    key={unit._id}
-                    className="p-3 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
-                    onClick={() => {
-                      handleAddToCart(selectedProduct, unit)
-                      setShowUnitDialog(false)
-                      setSelectedProduct(null)
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium">{unit.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {unit.conversionFactor || 1} pieces per {unit.name.toLowerCase()}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-primary">₵{unit.sellingPrice?.toFixed(2) || selectedProduct.price.toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">per {unit.name.toLowerCase()}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setShowUnitDialog(false)
-                  setSelectedProduct(null)
-                }}
-                className="w-full"
-              >
-                Cancel
-              </Button>
-            </div>
-          )}
+          <CalculatorDialog />
         </DialogContent>
       </Dialog>
+
+      {/* No Sale Dialog */}
+      <Dialog open={noSaleOpen} onOpenChange={setNoSaleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>No Sale - Open Cash Drawer</DialogTitle>
+          </DialogHeader>
+          <NoSaleDialog onConfirm={handleNoSale} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Last Sale Dialog */}
+      <Dialog open={lastReceiptOpen} onOpenChange={setLastReceiptOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Last Sale Details</DialogTitle>
+          </DialogHeader>
+          <LastSaleDialog />
+        </DialogContent>
+      </Dialog>
+
     </POSLayout>
   )
 }

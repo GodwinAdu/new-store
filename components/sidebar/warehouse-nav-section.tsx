@@ -51,6 +51,10 @@ export function WarehouseNavSection({
       title: "Receive Stock",
       url: `/dashboard/warehouse/receive-stock`,
     },
+    {
+      title: "Purchase Orders",
+      url: `/dashboard/warehouse/purchase-orders`,
+    },
   ];
 
   return (

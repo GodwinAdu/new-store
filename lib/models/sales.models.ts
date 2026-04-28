@@ -22,8 +22,17 @@ export interface ISale extends Document {
   subtotal?: number;
   discount?: number;
   tax?: number;
+  total?: number;            // Final total amount
   cashReceived?: number;
   cashier?: Schema.Types.ObjectId;
+  
+  // Payment Verification Fields
+  paymentStatus?: 'pending' | 'verified' | 'rejected' | 'completed';
+  verificationCode?: string;
+  verifiedBy?: Schema.Types.ObjectId;
+  verifiedAt?: Date;
+  rejectionReason?: string;
+  
   modifiedBy?: Schema.Types.ObjectId;
   modificationHistory?: Array<{
     modifiedBy: Schema.Types.ObjectId;
@@ -62,8 +71,21 @@ const saleSchema = new Schema<ISale>(
     subtotal: { type: Number },
     discount: { type: Number, default: 0 },
     tax: { type: Number, default: 0 },
+    total: { type: Number },
     cashReceived: { type: Number },
     cashier: { type: Schema.Types.ObjectId, ref: "Staff", required: true },
+    
+    // Payment Verification
+    paymentStatus: { 
+      type: String, 
+      enum: ['pending', 'verified', 'rejected', 'completed'], 
+      default: 'pending' 
+    },
+    verificationCode: { type: String, sparse: true },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: "Staff" },
+    verifiedAt: { type: Date },
+    rejectionReason: { type: String },
+    
     modifiedBy: { type: Schema.Types.ObjectId, ref: "Staff" },
     modificationHistory: [{
       modifiedBy: { type: Schema.Types.ObjectId, ref: "Staff", required: true },
@@ -79,10 +101,19 @@ const saleSchema = new Schema<ISale>(
 );
 
 saleSchema.index({ warehouse: 1, saleDate: -1 });
+saleSchema.index({ verificationCode: 1 }, { unique: true, sparse: true });
+saleSchema.index({ paymentStatus: 1, saleDate: -1 });
 
-// PRE-SAVE: consume batches FIFO
-saleSchema.pre('save', async function (next) {
+// Generate unique verification code and consume batches FIFO before save
+saleSchema.pre('save', async function () {
   const sale = this as ISale;
+  
+  // Generate verification code if not exists
+  if (!sale.verificationCode) {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    sale.verificationCode = `VRF-${timestamp}-${random}`;
+  }
 
   let totalRevenue = 0;
   let totalCost = 0;
@@ -119,7 +150,7 @@ saleSchema.pre('save', async function (next) {
 
     if (qtyNeeded > 0) {
       // not enough stock overall – abort save
-      return next(new Error(`Insufficient stock for product ${item.product}`));
+      throw new Error(`Insufficient stock for product ${item.product}`);
     }
 
     // 4️⃣ record revenue & cost for this line
@@ -134,8 +165,6 @@ saleSchema.pre('save', async function (next) {
   sale.totalRevenue = totalRevenue;
   sale.totalCost = totalCost;
   sale.profit = totalRevenue - totalCost;
-
-  next();
 });
 
 const Sale = models.Sale ?? model<ISale>('Sale', saleSchema);

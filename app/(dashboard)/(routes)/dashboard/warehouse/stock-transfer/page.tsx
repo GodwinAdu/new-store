@@ -1,6 +1,6 @@
 "use client"
 
-import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,591 +8,500 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowRightLeft, Search, Plus, Eye, Check, X, Truck, Package } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
+import { ArrowRightLeft, Plus, Eye, CheckCircle, Package, Truck, Check, X } from "lucide-react"
 import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import { useState } from "react"
+import { toast } from "sonner"
+import {
+  getAllStockTransfers,
+  createStockTransfer,
+  approveStockTransfer,
+  completeStockTransfer,
+  getWarehouses,
+  getWarehouseStock,
+} from "@/lib/actions/stock-transfer.actions"
 
-const transferHistory = [
-    {
-        id: "TRF-001",
-        date: "2024-01-15",
-        product: "Chicken Breast",
-        sku: "SKU-002",
-        fromWarehouse: "Warehouse A",
-        toWarehouse: "Cold Storage",
-        quantity: 50,
-        status: "In Transit",
-        requestedBy: "John Smith",
-        approvedBy: "Manager",
-        transferDate: "2024-01-15",
-        expectedArrival: "2024-01-15 16:00",
-        actualArrival: null,
-        reason: "Stock Rebalancing",
-        notes: "Moving excess stock to cold storage",
-        progress: 75,
-    },
-    {
-        id: "TRF-002",
-        date: "2024-01-14",
-        product: "Whole Chicken",
-        sku: "SKU-001",
-        fromWarehouse: "Cold Storage",
-        toWarehouse: "Warehouse B",
-        quantity: 30,
-        status: "Completed",
-        requestedBy: "Sarah Wilson",
-        approvedBy: "Manager",
-        transferDate: "2024-01-14",
-        expectedArrival: "2024-01-14 14:00",
-        actualArrival: "2024-01-14 13:45",
-        reason: "Customer Demand",
-        notes: "High demand at Warehouse B location",
-        progress: 100,
-    },
-    {
-        id: "TRF-003",
-        date: "2024-01-13",
-        product: "Chicken Wings",
-        sku: "SKU-006",
-        fromWarehouse: "Warehouse A",
-        toWarehouse: "Warehouse B",
-        quantity: 25,
-        status: "Pending",
-        requestedBy: "Mike Johnson",
-        approvedBy: null,
-        transferDate: null,
-        expectedArrival: null,
-        actualArrival: null,
-        reason: "Stock Rebalancing",
-        notes: "Balancing inventory across locations",
-        progress: 0,
-    },
-    {
-        id: "TRF-004",
-        date: "2024-01-12",
-        product: "Chicken Thighs",
-        sku: "SKU-003",
-        fromWarehouse: "Warehouse B",
-        toWarehouse: "Cold Storage",
-        quantity: 40,
-        status: "Cancelled",
-        requestedBy: "Tom Brown",
-        approvedBy: "Manager",
-        transferDate: null,
-        expectedArrival: null,
-        actualArrival: null,
-        reason: "Quality Issues",
-        notes: "Transfer cancelled due to quality concerns",
-        progress: 0,
-    },
-]
+interface StockTransfer {
+  _id: string
+  transferNumber: string
+  fromWarehouse: { _id: string; name: string; location: string }
+  toWarehouse: { _id: string; name: string; location: string }
+  status: "pending" | "in-transit" | "completed" | "cancelled"
+  transferDate: string
+  completedDate?: string
+  items: Array<{
+    product: { _id: string; name: string; sku: string }
+    quantity: number
+    unitCost: number
+  }>
+  requestedBy?: { name: string }
+  approvedBy?: { name: string }
+  reason: string
+  notes?: string
+}
 
-const warehouses = [
-    { id: "warehouse-a", name: "Warehouse A", location: "Main Storage", capacity: "85%" },
-    { id: "warehouse-b", name: "Warehouse B", location: "Secondary", capacity: "62%" },
-    { id: "cold-storage", name: "Cold Storage", location: "Refrigerated", capacity: "45%" },
-]
+interface Warehouse {
+  _id: string
+  name: string
+  location: string
+}
 
-export default function StockTransfer() {
-    const [selectedTab, setSelectedTab] = useState("active")
+const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-800",
+  "in-transit": "bg-blue-100 text-blue-800",
+  completed: "bg-green-100 text-green-800",
+  cancelled: "bg-red-100 text-red-800",
+}
 
-    const activeTransfers = transferHistory.filter((t) => t.status === "In Transit").length
-    const pendingTransfers = transferHistory.filter((t) => t.status === "Pending").length
-    const completedTransfers = transferHistory.filter((t) => t.status === "Completed").length
+export default function StockTransferPage() {
+  const [transfers, setTransfers] = useState<StockTransfer[]>([])
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [warehouseStock, setWarehouseStock] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [selectedTransfer, setSelectedTransfer] = useState<StockTransfer | null>(null)
+  const [activeTab, setActiveTab] = useState("active")
 
+  const [form, setForm] = useState({
+    fromWarehouseId: "",
+    toWarehouseId: "",
+    reason: "",
+    notes: "",
+    items: [{ productId: "", quantity: 1, unitCost: 0 }],
+  })
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      const [transfersData, warehousesData] = await Promise.all([
+        getAllStockTransfers(),
+        getWarehouses(),
+      ])
+      setTransfers(transfersData)
+      setWarehouses(warehousesData)
+    } catch {
+      toast.error("Failed to load data")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadWarehouseStock = async (warehouseId: string) => {
+    if (!warehouseId) { setWarehouseStock([]); return }
+    try {
+      const stock = await getWarehouseStock(warehouseId)
+      setWarehouseStock(stock)
+    } catch {
+      toast.error("Failed to load warehouse stock")
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!form.fromWarehouseId || !form.toWarehouseId || !form.reason) {
+      toast.error("Please fill in all required fields")
+      return
+    }
+    if (form.items.some(i => !i.productId || i.quantity <= 0)) {
+      toast.error("Please fill in all item details")
+      return
+    }
+    setSubmitting(true)
+    try {
+      await createStockTransfer({
+        fromWarehouseId: form.fromWarehouseId,
+        toWarehouseId: form.toWarehouseId,
+        reason: form.reason,
+        notes: form.notes,
+        items: form.items.map(i => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitCost: i.unitCost,
+        })),
+      })
+      toast.success("Transfer request created")
+      setShowCreateDialog(false)
+      setForm({ fromWarehouseId: "", toWarehouseId: "", reason: "", notes: "", items: [{ productId: "", quantity: 1, unitCost: 0 }] })
+      loadData()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to create transfer")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleApprove = async (id: string) => {
+    try {
+      await approveStockTransfer(id)
+      toast.success("Transfer approved and marked in-transit")
+      loadData()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to approve transfer")
+    }
+  }
+
+  const handleComplete = async (id: string) => {
+    try {
+      await completeStockTransfer(id)
+      toast.success("Transfer completed — stock moved")
+      loadData()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to complete transfer")
+    }
+  }
+
+  const updateItem = (index: number, field: string, value: any) => {
+    const items = [...form.items]
+    items[index] = { ...items[index], [field]: value }
+    if (field === "productId") {
+      const stock = warehouseStock.find(s => s.product._id === value)
+      if (stock) items[index].unitCost = stock.batches?.[0]?.unitCost || 0
+    }
+    setForm({ ...form, items })
+  }
+
+  const pending = transfers.filter(t => t.status === "pending")
+  const inTransit = transfers.filter(t => t.status === "in-transit")
+  const completed = transfers.filter(t => t.status === "completed")
+
+  if (loading) {
     return (
-      
-
-            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold">Stock Transfer</h1>
-                        <p className="text-muted-foreground">Transfer inventory between warehouses and track movements</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline">
-                            <ArrowRightLeft className="h-4 w-4 mr-2" />
-                            Bulk Transfer
-                        </Button>
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    New Transfer
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                                <DialogHeader>
-                                    <DialogTitle>Create Stock Transfer</DialogTitle>
-                                    <DialogDescription>Transfer inventory between warehouses</DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="from-warehouse">From Warehouse</Label>
-                                            <Select>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select source warehouse" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {warehouses.map((warehouse) => (
-                                                        <SelectItem key={warehouse.id} value={warehouse.id}>
-                                                            {warehouse.name} - {warehouse.location}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="to-warehouse">To Warehouse</Label>
-                                            <Select>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select destination warehouse" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {warehouses.map((warehouse) => (
-                                                        <SelectItem key={warehouse.id} value={warehouse.id}>
-                                                            {warehouse.name} - {warehouse.location}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="product">Product</Label>
-                                            <Select>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select product" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="whole-chicken">Whole Chicken</SelectItem>
-                                                    <SelectItem value="chicken-breast">Chicken Breast</SelectItem>
-                                                    <SelectItem value="chicken-thighs">Chicken Thighs</SelectItem>
-                                                    <SelectItem value="chicken-wings">Chicken Wings</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="available-stock">Available Stock</Label>
-                                            <Input id="available-stock" value="245" disabled />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="transfer-quantity">Transfer Quantity</Label>
-                                            <Input id="transfer-quantity" type="number" placeholder="0" />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="reason">Transfer Reason</Label>
-                                            <Select>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select reason" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="stock-rebalancing">Stock Rebalancing</SelectItem>
-                                                    <SelectItem value="customer-demand">Customer Demand</SelectItem>
-                                                    <SelectItem value="warehouse-maintenance">Warehouse Maintenance</SelectItem>
-                                                    <SelectItem value="quality-issues">Quality Issues</SelectItem>
-                                                    <SelectItem value="expiry-management">Expiry Management</SelectItem>
-                                                    <SelectItem value="other">Other</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="priority">Priority</Label>
-                                            <Select>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select priority" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="low">Low</SelectItem>
-                                                    <SelectItem value="medium">Medium</SelectItem>
-                                                    <SelectItem value="high">High</SelectItem>
-                                                    <SelectItem value="urgent">Urgent</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="expected-date">Expected Transfer Date</Label>
-                                        <Input id="expected-date" type="datetime-local" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="notes">Notes</Label>
-                                        <Textarea id="notes" placeholder="Additional details about the transfer..." />
-                                    </div>
-                                </div>
-                                <div className="flex justify-end gap-2">
-                                    <Button variant="outline">Save as Draft</Button>
-                                    <Button>Create Transfer</Button>
-                                </div>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                </div>
-
-                <div className="grid auto-rows-min gap-4 md:grid-cols-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Active Transfers</CardTitle>
-                            <Truck className="h-4 w-4 text-blue-600" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-blue-600">{activeTransfers}</div>
-                            <p className="text-xs text-muted-foreground">Currently in transit</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-                            <Package className="h-4 w-4 text-yellow-600" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-yellow-600">{pendingTransfers}</div>
-                            <p className="text-xs text-muted-foreground">Awaiting approval</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                            <Check className="h-4 w-4 text-green-600" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-green-600">{completedTransfers}</div>
-                            <p className="text-xs text-muted-foreground">This month</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Transfers</CardTitle>
-                            <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{transferHistory.length}</div>
-                            <p className="text-xs text-muted-foreground">All time</p>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                    {warehouses.map((warehouse) => (
-                        <Card key={warehouse.id}>
-                            <CardHeader>
-                                <CardTitle className="text-base">{warehouse.name}</CardTitle>
-                                <CardDescription>{warehouse.location}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Capacity</span>
-                                        <span>{warehouse.capacity}</span>
-                                    </div>
-                                    <Progress value={Number.parseInt(warehouse.capacity)} className="h-2" />
-                                    <div className="text-xs text-muted-foreground">
-                                        {transferHistory.filter((t) => t.fromWarehouse === warehouse.name).length} outgoing transfers
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-
-                <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
-                    <TabsList>
-                        <TabsTrigger value="active">Active Transfers</TabsTrigger>
-                        <TabsTrigger value="pending">Pending Approval</TabsTrigger>
-                        <TabsTrigger value="history">Transfer History</TabsTrigger>
-                        <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="active" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Active Transfers</CardTitle>
-                                <CardDescription>Transfers currently in progress</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {transferHistory
-                                        .filter((transfer) => transfer.status === "In Transit")
-                                        .map((transfer) => (
-                                            <div key={transfer.id} className="flex items-center justify-between p-4 border rounded-lg">
-                                                <div className="space-y-1">
-                                                    <p className="text-sm font-medium">{transfer.id}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {transfer.product} • {transfer.quantity} units
-                                                    </p>
-                                                    <div className="flex items-center text-xs text-muted-foreground">
-                                                        <ArrowRightLeft className="h-3 w-3 mr-1" />
-                                                        {transfer.fromWarehouse} → {transfer.toWarehouse}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Progress value={transfer.progress} className="w-32 h-2" />
-                                                        <span className="text-xs">{transfer.progress}%</span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right space-y-1">
-                                                    <Badge variant="secondary">In Transit</Badge>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        ETA: {transfer.expectedArrival?.split(" ")[1]}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="pending" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Pending Approvals</CardTitle>
-                                <CardDescription>Transfer requests awaiting approval</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Transfer ID</TableHead>
-                                            <TableHead>Product</TableHead>
-                                            <TableHead>From → To</TableHead>
-                                            <TableHead>Quantity</TableHead>
-                                            <TableHead>Reason</TableHead>
-                                            <TableHead>Requested By</TableHead>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {transferHistory
-                                            .filter((transfer) => transfer.status === "Pending")
-                                            .map((transfer) => (
-                                                <TableRow key={transfer.id}>
-                                                    <TableCell className="font-medium">{transfer.id}</TableCell>
-                                                    <TableCell>
-                                                        <div className="space-y-1">
-                                                            <div className="font-medium">{transfer.product}</div>
-                                                            <div className="text-sm text-muted-foreground">{transfer.sku}</div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-sm">{transfer.fromWarehouse}</span>
-                                                            <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-                                                            <span className="text-sm">{transfer.toWarehouse}</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="font-medium">{transfer.quantity}</TableCell>
-                                                    <TableCell>{transfer.reason}</TableCell>
-                                                    <TableCell>{transfer.requestedBy}</TableCell>
-                                                    <TableCell>{transfer.date}</TableCell>
-                                                    <TableCell>
-                                                        <div className="flex gap-1">
-                                                            <Button variant="ghost" size="sm">
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button variant="ghost" size="sm">
-                                                                <Check className="h-4 w-4 text-green-600" />
-                                                            </Button>
-                                                            <Button variant="ghost" size="sm">
-                                                                <X className="h-4 w-4 text-red-600" />
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="history" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle>Transfer History</CardTitle>
-                                        <CardDescription>Complete history of stock transfers</CardDescription>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <div className="relative">
-                                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                            <Input placeholder="Search transfers..." className="pl-8 w-64" />
-                                        </div>
-                                        <Select>
-                                            <SelectTrigger className="w-32">
-                                                <SelectValue placeholder="Status" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Status</SelectItem>
-                                                <SelectItem value="completed">Completed</SelectItem>
-                                                <SelectItem value="in-transit">In Transit</SelectItem>
-                                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Transfer ID</TableHead>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Product</TableHead>
-                                            <TableHead>From → To</TableHead>
-                                            <TableHead>Quantity</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Requested By</TableHead>
-                                            <TableHead>Completion</TableHead>
-                                            <TableHead>Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {transferHistory.map((transfer) => (
-                                            <TableRow key={transfer.id}>
-                                                <TableCell className="font-medium">{transfer.id}</TableCell>
-                                                <TableCell>{transfer.date}</TableCell>
-                                                <TableCell>
-                                                    <div className="space-y-1">
-                                                        <div className="font-medium">{transfer.product}</div>
-                                                        <div className="text-sm text-muted-foreground">{transfer.sku}</div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm">{transfer.fromWarehouse}</span>
-                                                        <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-                                                        <span className="text-sm">{transfer.toWarehouse}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="font-medium">{transfer.quantity}</TableCell>
-                                                <TableCell>
-                                                    <Badge
-                                                        variant={
-                                                            transfer.status === "Completed"
-                                                                ? "default"
-                                                                : transfer.status === "In Transit"
-                                                                    ? "secondary"
-                                                                    : transfer.status === "Pending"
-                                                                        ? "outline"
-                                                                        : "destructive"
-                                                        }
-                                                    >
-                                                        {transfer.status}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>{transfer.requestedBy}</TableCell>
-                                                <TableCell>{transfer.actualArrival || transfer.expectedArrival || "N/A"}</TableCell>
-                                                <TableCell>
-                                                    <Button variant="ghost" size="sm">
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="analytics" className="space-y-4">
-                        <div className="grid gap-4 md:grid-cols-3">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Transfer Volume</CardTitle>
-                                    <CardDescription>Monthly transfer statistics</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        <div className="text-3xl font-bold">{transferHistory.length}</div>
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between text-sm">
-                                                <span>Completed</span>
-                                                <span>{completedTransfers}</span>
-                                            </div>
-                                            <div className="flex justify-between text-sm">
-                                                <span>In Transit</span>
-                                                <span>{activeTransfers}</span>
-                                            </div>
-                                            <div className="flex justify-between text-sm">
-                                                <span>Pending</span>
-                                                <span>{pendingTransfers}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Top Transfer Routes</CardTitle>
-                                    <CardDescription>Most common transfer paths</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-3">
-                                        {[
-                                            { route: "Warehouse A → Cold Storage", count: 8 },
-                                            { route: "Cold Storage → Warehouse B", count: 5 },
-                                            { route: "Warehouse B → Warehouse A", count: 3 },
-                                        ].map((route, index) => (
-                                            <div key={index} className="flex items-center justify-between">
-                                                <span className="text-sm">{route.route}</span>
-                                                <span className="text-sm font-medium">{route.count}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Transfer Efficiency</CardTitle>
-                                    <CardDescription>Performance metrics</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <div className="text-2xl font-bold">94%</div>
-                                            <div className="text-sm text-muted-foreground">On-time completion rate</div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <div className="text-2xl font-bold">2.3h</div>
-                                            <div className="text-sm text-muted-foreground">Average transfer time</div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    </TabsContent>
-                </Tabs>
-            </div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
     )
+  }
+
+  return (
+    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Stock Transfer</h1>
+          <p className="text-muted-foreground">Transfer inventory between warehouses</p>
+        </div>
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Transfer
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Create Stock Transfer</DialogTitle>
+              <DialogDescription>Request a stock transfer between warehouses</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>From Warehouse *</Label>
+                  <Select
+                    value={form.fromWarehouseId}
+                    onValueChange={v => {
+                      setForm({ ...form, fromWarehouseId: v, items: [{ productId: "", quantity: 1, unitCost: 0 }] })
+                      loadWarehouseStock(v)
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(w => (
+                        <SelectItem key={w._id} value={w._id}>{w.name} — {w.location}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>To Warehouse *</Label>
+                  <Select
+                    value={form.toWarehouseId}
+                    onValueChange={v => setForm({ ...form, toWarehouseId: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
+                    <SelectContent>
+                      {warehouses.filter(w => w._id !== form.fromWarehouseId).map(w => (
+                        <SelectItem key={w._id} value={w._id}>{w.name} — {w.location}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reason *</Label>
+                <Input
+                  value={form.reason}
+                  onChange={e => setForm({ ...form, reason: e.target.value })}
+                  placeholder="e.g. Stock rebalancing, customer demand"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Items *</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setForm({ ...form, items: [...form.items, { productId: "", quantity: 1, unitCost: 0 }] })}
+                  >
+                    Add Item
+                  </Button>
+                </div>
+                {form.items.map((item, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-6">
+                      <Select value={item.productId} onValueChange={v => updateItem(i, "productId", v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder={form.fromWarehouseId ? "Select product" : "Select source warehouse first"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouseStock.length === 0
+                            ? <SelectItem value="_none" disabled>No stock available</SelectItem>
+                            : warehouseStock.map(s => (
+                              <SelectItem key={s.product._id} value={s.product._id}>
+                                {s.product.name} ({s.product.sku}) — {s.totalQuantity} avail.
+                              </SelectItem>
+                            ))
+                          }
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-3">
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="Qty"
+                        value={item.quantity}
+                        onChange={e => updateItem(i, "quantity", parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Cost"
+                        value={item.unitCost}
+                        onChange={e => updateItem(i, "unitCost", parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      {form.items.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea
+                  value={form.notes}
+                  onChange={e => setForm({ ...form, notes: e.target.value })}
+                  placeholder="Additional notes..."
+                  rows={2}
+                />
+              </div>
+
+              <Button onClick={handleCreate} disabled={submitting} className="w-full">
+                {submitting ? "Creating..." : "Create Transfer Request"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Pending Approval", value: pending.length, icon: Package, color: "text-yellow-600" },
+          { label: "In Transit", value: inTransit.length, icon: Truck, color: "text-blue-600" },
+          { label: "Completed", value: completed.length, icon: Check, color: "text-green-600" },
+          { label: "Total", value: transfers.length, icon: ArrowRightLeft, color: "text-muted-foreground" },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <Card key={label}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{label}</CardTitle>
+              <Icon className={`h-4 w-4 ${color}`} />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${color}`}>{value}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="active">In Transit ({inTransit.length})</TabsTrigger>
+          <TabsTrigger value="pending">Pending ({pending.length})</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="active">
+          <TransferTable
+            transfers={inTransit}
+            onView={setSelectedTransfer}
+            onComplete={handleComplete}
+            showComplete
+          />
+        </TabsContent>
+
+        <TabsContent value="pending">
+          <TransferTable
+            transfers={pending}
+            onView={setSelectedTransfer}
+            onApprove={handleApprove}
+            showApprove
+          />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <TransferTable transfers={completed} onView={setSelectedTransfer} />
+        </TabsContent>
+      </Tabs>
+
+      {/* Detail dialog */}
+      <Dialog open={!!selectedTransfer} onOpenChange={open => !open && setSelectedTransfer(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Transfer {selectedTransfer?.transferNumber}</DialogTitle>
+          </DialogHeader>
+          {selectedTransfer && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><span className="font-medium">From:</span> {selectedTransfer.fromWarehouse.name}</div>
+                <div><span className="font-medium">To:</span> {selectedTransfer.toWarehouse.name}</div>
+                <div><span className="font-medium">Status:</span> <Badge className={STATUS_COLORS[selectedTransfer.status]}>{selectedTransfer.status}</Badge></div>
+                <div><span className="font-medium">Date:</span> {new Date(selectedTransfer.transferDate).toLocaleDateString()}</div>
+                <div className="col-span-2"><span className="font-medium">Reason:</span> {selectedTransfer.reason}</div>
+                {selectedTransfer.notes && <div className="col-span-2"><span className="font-medium">Notes:</span> {selectedTransfer.notes}</div>}
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Unit Cost</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedTransfer.items.map((item, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{item.product.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.product.sku}</TableCell>
+                      <TableCell className="text-right">{item.quantity}</TableCell>
+                      <TableCell className="text-right">₵{item.unitCost.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function TransferTable({
+  transfers,
+  onView,
+  onApprove,
+  onComplete,
+  showApprove = false,
+  showComplete = false,
+}: {
+  transfers: StockTransfer[]
+  onView: (t: StockTransfer) => void
+  onApprove?: (id: string) => void
+  onComplete?: (id: string) => void
+  showApprove?: boolean
+  showComplete?: boolean
+}) {
+  if (transfers.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center h-32 text-muted-foreground">
+          No transfers found
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-4">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Transfer #</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead>Items</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {transfers.map(t => (
+              <TableRow key={t._id}>
+                <TableCell className="font-medium">{t.transferNumber}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1 text-sm">
+                    <span>{t.fromWarehouse.name}</span>
+                    <ArrowRightLeft className="h-3 w-3 text-muted-foreground" />
+                    <span>{t.toWarehouse.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell>{t.items.length} item{t.items.length !== 1 ? "s" : ""}</TableCell>
+                <TableCell>{new Date(t.transferDate).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  <Badge className={STATUS_COLORS[t.status]}>{t.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => onView(t)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {showApprove && onApprove && (
+                      <Button size="sm" variant="outline" onClick={() => onApprove(t._id)}>
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Approve
+                      </Button>
+                    )}
+                    {showComplete && onComplete && (
+                      <Button size="sm" onClick={() => onComplete(t._id)}>
+                        <Package className="h-4 w-4 mr-1" />
+                        Complete
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
 }

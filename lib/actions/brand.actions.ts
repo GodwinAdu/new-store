@@ -70,6 +70,55 @@ async function _fetchAllBrands(user: User) {
 }
 
 
+async function _updateBrand(user: User, id: string, values: { name: string, isActive: boolean }) {
+    try {
+        if (!user) throw new Error("User not authorized");
+
+        await connectToDB();
+
+        const brand = await Brand.findById(id);
+        if (!brand) throw new Error("Brand not found");
+
+        const updatedBrand = await Brand.findByIdAndUpdate(
+            id,
+            { name: values.name, isActive: values.isActive },
+            { new: true }
+        );
+
+        const history = new History({
+            actionType: 'BRAND_UPDATED',
+            details: { brandId: id, updatedBy: user._id },
+            message: `${user.fullName} updated brand (ID: ${id}) on ${new Date().toLocaleString()}.`,
+            performedBy: user._id,
+            entityId: id,
+            entityType: 'BRAND'
+        });
+
+        await history.save();
+
+        return JSON.parse(JSON.stringify(updatedBrand));
+    } catch (error) {
+        console.log("error while updating brand", error);
+        throw error;
+    }
+}
+
+async function _fetchBrandById(user: User, id: string) {
+    try {
+        if (!user) throw new Error("User not authorized");
+
+        await connectToDB();
+
+        const brand = await Brand.findById(id);
+        if (!brand) throw new Error("Brand not found");
+
+        return JSON.parse(JSON.stringify(brand));
+    } catch (error) {
+        console.log("error while fetching brand", error);
+        throw error;
+    }
+}
+
 async function _deleteBrand(user: User, id: string) {
     try {
         if (!user) throw new Error("User not authenticated")
@@ -103,4 +152,6 @@ async function _deleteBrand(user: User, id: string) {
 
 export const createBrand = await withAuth(_createBrand)
 export const fetchAllBrands = await withAuth(_fetchAllBrands)
+export const updateBrand = await withAuth(_updateBrand)
+export const fetchBrandById = await withAuth(_fetchBrandById)
 export const deleteBrand = await withAuth(_deleteBrand)

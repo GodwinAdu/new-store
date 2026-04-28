@@ -230,6 +230,11 @@ export function NavMain({ role, hasWarehouseAccess, userRole }: NavMainProps) {
       roleField: "paymentAccount",
       items: [
         {
+          title: "Payment Verification",
+          url: `/dashboard/accounts/payment-verification`,
+          roleField: "manageListAccount"
+        },
+        {
           title: "List Accounts",
           url: `/dashboard/accounts/list-accounts`,
           roleField: "manageListAccount"

@@ -70,6 +70,55 @@ async function _fetchAllCategories(user: User) {
     }
 }
 
+async function _updateCategory(user: User, id: string, values: { name: string, isActive: boolean }) {
+    try {
+        if (!user) throw new Error("User not authorized");
+
+        await connectToDB();
+
+        const category = await Category.findById(id);
+        if (!category) throw new Error("Category not found");
+
+        const updatedCategory = await Category.findByIdAndUpdate(
+            id,
+            { name: values.name, isActive: values.isActive },
+            { new: true }
+        );
+
+        const history = new History({
+            actionType: 'CATEGORY_UPDATED',
+            details: { categoryId: id, updatedBy: user._id },
+            message: `${user.fullName} updated category (ID: ${id}) on ${new Date().toLocaleString()}.`,
+            performedBy: user._id,
+            entityId: id,
+            entityType: 'CATEGORY'
+        });
+
+        await history.save();
+
+        return JSON.parse(JSON.stringify(updatedCategory));
+    } catch (error) {
+        console.log("error while updating category", error);
+        throw error;
+    }
+}
+
+async function _fetchCategoryById(user: User, id: string) {
+    try {
+        if (!user) throw new Error("User not authorized");
+
+        await connectToDB();
+
+        const category = await Category.findById(id);
+        if (!category) throw new Error("Category not found");
+
+        return JSON.parse(JSON.stringify(category));
+    } catch (error) {
+        console.log("error while fetching category", error);
+        throw error;
+    }
+}
+
 async function _deleteCategory(user: User, id: string) {
     try {
         if (!user) throw new Error("User not authenticated")
@@ -102,4 +151,6 @@ async function _deleteCategory(user: User, id: string) {
 
 export const createCategory = await withAuth(_createCategory)
 export const fetchAllCategories = await withAuth(_fetchAllCategories)
+export const updateCategory = await withAuth(_updateCategory)
+export const fetchCategoryById = await withAuth(_fetchCategoryById)
 export const deleteCategory = await withAuth(_deleteCategory)

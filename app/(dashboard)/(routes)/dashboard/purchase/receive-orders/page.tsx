@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Package, CheckCircle, AlertCircle, Truck, ArrowLeft, Search, RefreshCw, Calendar, DollarSign, Scan } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getAllPurchases, receivePurchaseOrder, updatePurchaseOrder } from '@/lib/actions/purchase-dashboard.actions';
+import { postPurchaseToAccounts, getCashAndBankAccounts } from '@/lib/actions/accounts.actions';
 import { toast } from 'sonner';
 
 interface Purchase {
@@ -64,9 +65,12 @@ export default function ReceiveOrders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('shipped');
   const [stats, setStats] = useState<any>({});
+  const [cashBankAccounts, setCashBankAccounts] = useState<any[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
 
   useEffect(() => {
     loadShippedOrders();
+    getCashAndBankAccounts().then(setCashBankAccounts).catch(console.error);
   }, []);
 
   const loadShippedOrders = async () => {
@@ -137,7 +141,6 @@ export default function ReceiveOrders() {
 
     setProcessing(true);
     try {
-      // Receive the order with actual quantities and costs
       await receivePurchaseOrder(
         selectedPurchase._id,
         receivedItems.map(item => ({
@@ -149,17 +152,39 @@ export default function ReceiveOrders() {
         }))
       );
 
-      // Update order notes if any
       if (receiptNotes) {
         await updatePurchaseOrder(selectedPurchase._id, {
           notes: `${selectedPurchase.notes || ''}\n\nReceipt Notes: ${receiptNotes}`
         });
       }
 
-      toast.success('Order received successfully!');
+      // Post purchase cost to accounts if an account was selected
+      if (selectedAccountId) {
+        const actualTotal = receivedItems.reduce(
+          (sum, item) => sum + item.receivedQuantity * item.actualCost, 0
+        );
+        try {
+          await postPurchaseToAccounts({
+            purchaseId: selectedPurchase._id,
+            orderNumber: selectedPurchase._id.slice(-8).toUpperCase(),
+            amount: actualTotal,
+            supplierName: selectedPurchase.supplier.name,
+            warehouseName: 'Warehouse',
+            accountId: selectedAccountId,
+            paymentMethod: selectedPurchase.transportDetails?.carrier || 'Bank Transfer',
+          });
+          toast.success('Order received and expense posted to accounts!');
+        } catch {
+          toast.success('Order received! (Note: Could not post to accounts)');
+        }
+      } else {
+        toast.success('Order received successfully!');
+      }
+
       setSelectedPurchase(null);
       setReceivedItems([]);
       setReceiptNotes('');
+      setSelectedAccountId('');
       loadShippedOrders();
     } catch (error) {
       console.error('Failed to receive order:', error);
@@ -500,6 +525,23 @@ export default function ReceiveOrders() {
                         placeholder="Add any notes about this receipt..."
                         rows={3}
                       />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="accountSelect">Post Expense to Account (optional)</Label>
+                      <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                        <SelectTrigger id="accountSelect" className="mt-1">
+                          <SelectValue placeholder="Select account to debit (optional)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Skip — don't post to accounts</SelectItem>
+                          {cashBankAccounts.map((acc: any) => (
+                            <SelectItem key={acc._id} value={acc._id}>
+                              {acc.name} ({acc.type}) — ₵{acc.balance.toLocaleString()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="flex gap-4">

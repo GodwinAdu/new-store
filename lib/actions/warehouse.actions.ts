@@ -5,7 +5,6 @@ import { Warehouse } from '@/lib/models/Warehouse';
 import ProductBatch from '@/lib/models/product_batch.models';
 import Product from '@/lib/models/product.models';
 import Unit from '../models/unit.models';
-import { selectRowsFn } from '@tanstack/react-table';
 
 export async function fetchAllWarehouses() {
   try {
@@ -193,11 +192,11 @@ export async function getWarehouseProducts(warehouseId: string) {
       remaining: { $gt: 0 }
     }).populate({
       path: 'product',
-      select: 'name sku price unit',
-      populate: {
-        path: 'unit',
-        model: Unit
-      }
+      select: 'name sku categoryId unit reorderPoint',
+      populate: [
+        { path: 'unit', model: Unit },
+        { path: 'categoryId', model: 'Category', select: 'name' }
+      ]
     });
     
     // Get unique products with their latest batch info for pricing
@@ -207,15 +206,19 @@ export async function getWarehouseProducts(warehouseId: string) {
       if (!batch.product) return;
       
       const productId = batch.product._id.toString();
+      const categoryName = (batch.product.categoryId as any)?.name || 'General';
+
       if (!productMap.has(productId)) {
         productMap.set(productId, {
           _id: batch.product._id,
           name: batch.product.name,
           sku: batch.product.sku,
-          price: batch.sellingPrice || 25,
+          category: categoryName,
+          price: batch.sellingPrice || 0,
           originalUnitCost: batch.originalUnitCost,
           shippingCostPerUnit: batch.shippingCostPerUnit,
           totalStock: batch.remaining,
+          minStock: batch.product.reorderPoint ?? 10,
           units: batch.product.unit || [],
         });
       } else {
@@ -224,8 +227,6 @@ export async function getWarehouseProducts(warehouseId: string) {
         existing.totalStock += batch.remaining;
       }
     });
-
-    console.log('Product Map:', JSON.stringify(Array.from(productMap.values()), null, 2));  
     
     return JSON.parse(JSON.stringify(Array.from(productMap.values())));
   } catch (error) {
@@ -334,7 +335,44 @@ export async function createWarehouse(data: {
     
     return JSON.parse(JSON.stringify(warehouse));
   } catch (error) {
+    console.error('Create warehouse error:', error);
     throw new Error('Failed to create warehouse');
+  }
+}
+
+export async function addManualStock(data: {
+  warehouseId: string;
+  productId: string;
+  quantity: number;
+  unitCost: number;
+  shippingCost: number;
+  sellingPrice: number;
+  expiryDate: string;
+  notes?: string;
+}) {
+  try {
+    await connectToDB();
+    
+    const totalCostPerUnit = data.unitCost + data.shippingCost;
+    
+    const batch = await ProductBatch.create({
+      product: data.productId,
+      warehouseId: data.warehouseId,
+      quantity: data.quantity,
+      remaining: data.quantity,
+      unitCost: totalCostPerUnit,
+      originalUnitCost: data.unitCost,
+      shippingCostPerUnit: data.shippingCost,
+      sellingPrice: data.sellingPrice,
+      expiryDate: new Date(data.expiryDate),
+      isDepleted: false,
+      notes: data.notes || 'Manual stock entry'
+    });
+    
+    return JSON.parse(JSON.stringify(batch));
+  } catch (error) {
+    console.error('Add manual stock error:', error);
+    throw new Error('Failed to add manual stock');
   }
 }
 

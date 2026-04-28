@@ -4,6 +4,7 @@ import Account from '@/lib/models/account.models';
 import Expense from '@/lib/models/expense.models';
 import Income from '@/lib/models/income.models';
 import { connectToDB } from '../mongoose';
+import { currentUser } from '../helpers/session';
 
 export async function getAccounts() {
   try {
@@ -131,22 +132,22 @@ export async function createExpense(expenseData: {
   notes?: string;
 }) {
   try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
     await connectToDB();
     
-    // Check account exists
     const account = await Account.findById(expenseData.accountId);
-    if (!account) {
-      throw new Error('Account not found');
-    }
+    if (!account) throw new Error('Account not found');
     
     const expense = await Expense.create({
       ...expenseData,
       account: expenseData.accountId,
       status: 'paid',
-      createdBy: '507f1f77bcf86cd799439011' // Mock user ID
+      createdBy: user._id
     });
     
-    // Update account balance
+    // Deduct from account balance
     await Account.findByIdAndUpdate(expenseData.accountId, {
       $inc: { balance: -expenseData.amount }
     });
@@ -217,22 +218,22 @@ export async function createIncome(incomeData: {
   notes?: string;
 }) {
   try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
     await connectToDB();
     
-    // Check account exists
     const account = await Account.findById(incomeData.accountId);
-    if (!account) {
-      throw new Error('Account not found');
-    }
+    if (!account) throw new Error('Account not found');
     
     const income = await Income.create({
       ...incomeData,
       account: incomeData.accountId,
       status: 'received',
-      createdBy: '507f1f77bcf86cd799439011' // Mock user ID
+      createdBy: user._id
     });
     
-    // Update account balance
+    // Credit account balance
     await Account.findByIdAndUpdate(incomeData.accountId, {
       $inc: { balance: incomeData.amount }
     });
@@ -301,6 +302,9 @@ export async function transferFunds(transferData: {
   reference?: string;
 }) {
   try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
     await connectToDB();
     
     const [fromAccount, toAccount] = await Promise.all([
@@ -308,15 +312,10 @@ export async function transferFunds(transferData: {
       Account.findById(transferData.toAccountId)
     ]);
     
-    if (!fromAccount || !toAccount) {
-      throw new Error('Account not found');
-    }
+    if (!fromAccount || !toAccount) throw new Error('Account not found');
+    if (fromAccount.balance < transferData.amount) throw new Error('Insufficient funds');
     
-    if (fromAccount.balance < transferData.amount) {
-      throw new Error('Insufficient funds');
-    }
-    
-    // Update account balances
+    // Update account balances atomically
     await Promise.all([
       Account.findByIdAndUpdate(transferData.fromAccountId, {
         $inc: { balance: -transferData.amount }
@@ -326,32 +325,32 @@ export async function transferFunds(transferData: {
       })
     ]);
     
-    // Create expense and income records
+    // Create matching expense and income records for audit trail
+    const ref = transferData.reference || `TRF-${Date.now()}`;
     await Promise.all([
       Expense.create({
-        description: `Transfer to ${toAccount.name}`,
+        description: `Transfer to ${toAccount.name}: ${transferData.description}`,
         amount: transferData.amount,
         category: 'Transfer',
         account: transferData.fromAccountId,
         status: 'paid',
-        reference: transferData.reference,
-        createdBy: '507f1f77bcf86cd799439011'
+        reference: ref,
+        createdBy: user._id
       }),
       Income.create({
-        description: `Transfer from ${fromAccount.name}`,
+        description: `Transfer from ${fromAccount.name}: ${transferData.description}`,
         amount: transferData.amount,
         category: 'Transfer',
         account: transferData.toAccountId,
         status: 'received',
-        reference: transferData.reference,
-  
-        createdBy: '507f1f77bcf86cd799439011'
+        reference: ref,
+        createdBy: user._id
       })
     ]);
     
     return { success: true };
   } catch (error) {
-    throw new Error('Failed to transfer funds');
+    throw new Error(error instanceof Error ? error.message : 'Failed to transfer funds');
   }
 }
 
@@ -763,5 +762,134 @@ export async function getPaymentAccountReport(startDate?: Date, endDate?: Date) 
     };
   } catch (error) {
     throw new Error('Failed to generate payment account report');
+  }
+}
+
+// ============================================================
+// INTEGRATION: Post sale revenue to accounts when verified
+// Called by payment-verification flow after verifyPayment()
+// ============================================================
+
+/**
+ * Posts a verified POS sale as an Income entry to the specified account.
+ * Should be called after verifyPayment() succeeds.
+ */
+export async function postSaleToAccounts(saleData: {
+  saleId: string;
+  verificationCode: string;
+  amount: number;
+  paymentMethod: string;
+  cashierName: string;
+  warehouseName: string;
+  saleDate: string;
+  accountId: string; // The account to credit (e.g. "Cash Register", "Bank Account")
+}) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const account = await Account.findById(saleData.accountId);
+    if (!account) throw new Error('Account not found');
+
+    // Prevent double-posting: check if this sale was already posted
+    const existing = await Income.findOne({ reference: saleData.verificationCode });
+    if (existing) {
+      return JSON.parse(JSON.stringify(existing)); // idempotent
+    }
+
+    const income = await Income.create({
+      description: `POS Sale — ${saleData.warehouseName} (Cashier: ${saleData.cashierName})`,
+      amount: saleData.amount,
+      category: 'Sales',
+      account: saleData.accountId,
+      date: new Date(saleData.saleDate),
+      status: 'received',
+      paymentMethod: saleData.paymentMethod,
+      reference: saleData.verificationCode,
+      notes: `Sale ID: ${saleData.saleId}`,
+      createdBy: user._id,
+    });
+
+    // Credit the account balance
+    await Account.findByIdAndUpdate(saleData.accountId, {
+      $inc: { balance: saleData.amount }
+    });
+
+    return JSON.parse(JSON.stringify(income));
+  } catch (error) {
+    console.error('postSaleToAccounts error:', error);
+    throw new Error(error instanceof Error ? error.message : 'Failed to post sale to accounts');
+  }
+}
+
+/**
+ * Posts a purchase order payment as an Expense entry.
+ * Should be called when a purchase order is marked as received/paid.
+ */
+export async function postPurchaseToAccounts(purchaseData: {
+  purchaseId: string;
+  orderNumber: string;
+  amount: number;
+  supplierName: string;
+  warehouseName: string;
+  accountId: string;
+  paymentMethod?: string;
+}) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const account = await Account.findById(purchaseData.accountId);
+    if (!account) throw new Error('Account not found');
+
+    // Prevent double-posting
+    const existing = await Expense.findOne({ reference: `PO-${purchaseData.purchaseId}` });
+    if (existing) {
+      return JSON.parse(JSON.stringify(existing));
+    }
+
+    const expense = await Expense.create({
+      description: `Purchase from ${purchaseData.supplierName} — ${purchaseData.warehouseName}`,
+      amount: purchaseData.amount,
+      category: 'Purchases',
+      account: purchaseData.accountId,
+      date: new Date(),
+      status: 'paid',
+      paymentMethod: purchaseData.paymentMethod || 'Bank Transfer',
+      reference: `PO-${purchaseData.purchaseId}`,
+      notes: `Order: ${purchaseData.orderNumber}`,
+      createdBy: user._id,
+    });
+
+    // Debit the account balance
+    await Account.findByIdAndUpdate(purchaseData.accountId, {
+      $inc: { balance: -purchaseData.amount }
+    });
+
+    return JSON.parse(JSON.stringify(expense));
+  } catch (error) {
+    console.error('postPurchaseToAccounts error:', error);
+    throw new Error(error instanceof Error ? error.message : 'Failed to post purchase to accounts');
+  }
+}
+
+/**
+ * Returns active accounts suitable for receiving POS sale revenue.
+ * Used by the payment verification UI to let accountants choose which account to credit.
+ */
+export async function getCashAndBankAccounts() {
+  try {
+    await connectToDB();
+    const accounts = await Account.find({
+      status: 'active',
+      type: { $in: ['cash', 'bank'] }
+    }).sort({ type: 1, name: 1 });
+    return JSON.parse(JSON.stringify(accounts));
+  } catch (error) {
+    throw new Error('Failed to fetch cash/bank accounts');
   }
 }

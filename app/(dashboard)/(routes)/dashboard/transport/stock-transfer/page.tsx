@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowRightLeft, Plus, Search, Eye, CheckCircle, XCircle, Warehouse, Package } from 'lucide-react';
 import { getAllStockTransfers, createStockTransfer, approveStockTransfer, completeStockTransfer, getWarehouses, getWarehouseStock } from '@/lib/actions/stock-transfer.actions';
-import { getProducts } from '@/lib/actions/pos.actions';
 
 interface StockTransfer {
   _id: string;
@@ -39,17 +38,9 @@ interface Warehouse {
   type: string;
 }
 
-interface Product {
-  _id: string;
-  name: string;
-  sku: string;
-  price: number;
-}
-
 export default function StockTransfer() {
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [warehouseStock, setWarehouseStock] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -71,14 +62,12 @@ export default function StockTransfer() {
 
   const loadData = async () => {
     try {
-      const [transfersData, warehousesData, productsData] = await Promise.all([
+      const [transfersData, warehousesData] = await Promise.all([
         getAllStockTransfers(),
         getWarehouses(),
-        getProducts()
       ]);
       setTransfers(transfersData);
       setWarehouses(warehousesData);
-      setProducts(productsData);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -107,7 +96,6 @@ export default function StockTransfer() {
         })),
         reason: newTransfer.reason,
         notes: newTransfer.notes,
-        requestedBy: '507f1f77bcf86cd799439011' // Mock user ID
       });
       
       setShowCreateDialog(false);
@@ -126,7 +114,7 @@ export default function StockTransfer() {
 
   const handleApproveTransfer = async (transferId: string) => {
     try {
-      await approveStockTransfer(transferId, '507f1f77bcf86cd799439011');
+      await approveStockTransfer(transferId);
       loadData();
     } catch (error) {
       console.error('Failed to approve transfer:', error);
@@ -154,9 +142,10 @@ export default function StockTransfer() {
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     
     if (field === 'productId') {
-      const product = products.find(p => p._id === value);
-      if (product) {
-        updatedItems[index].unitCost = product.price;
+      // Pre-fill unit cost from the warehouse stock batch
+      const stockItem = warehouseStock.find(s => s.product._id === value);
+      if (stockItem) {
+        updatedItems[index].unitCost = stockItem.batches?.[0]?.unitCost || 0;
       }
     }
     
@@ -263,11 +252,17 @@ export default function StockTransfer() {
                           <SelectValue placeholder="Select product" />
                         </SelectTrigger>
                         <SelectContent>
-                          {products.map((product) => (
-                            <SelectItem key={product._id} value={product._id}>
-                              {product.name} ({product.sku})
+                          {warehouseStock.length === 0 ? (
+                            <SelectItem value="_none" disabled>
+                              {newTransfer.fromWarehouseId ? 'No stock in this warehouse' : 'Select a source warehouse first'}
                             </SelectItem>
-                          ))}
+                          ) : (
+                            warehouseStock.map((stockItem) => (
+                              <SelectItem key={stockItem.product._id} value={stockItem.product._id}>
+                                {stockItem.product.name} ({stockItem.product.sku}) — {stockItem.totalQuantity} available
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <Input

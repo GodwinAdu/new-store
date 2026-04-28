@@ -45,8 +45,8 @@ const productBatchSchema = new Schema<IProductBatch>({
   timestamps: true
 });
 // Pre-save hook to generate batch number
-productBatchSchema.pre('save', async function (next) {
-  if (this.batchNumber) return next(); // Skip if already set
+productBatchSchema.pre('save', async function () {
+  if (this.batchNumber) return; // Skip if already set
 
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0'); // "07"
@@ -55,17 +55,12 @@ productBatchSchema.pre('save', async function (next) {
   const startOfMonth = new Date(year, now.getMonth(), 1);
   const endOfMonth = new Date(year, now.getMonth() + 1, 0, 23, 59, 59);
 
-  try {
-    const count = await model('ProductBatch').countDocuments({
-      createdAt: { $gte: startOfMonth, $lte: endOfMonth },
-    });
+  const count = await model('ProductBatch').countDocuments({
+    createdAt: { $gte: startOfMonth, $lte: endOfMonth },
+  });
 
-    const sequence = String(count + 1).padStart(4, '0'); // "0001", "0002", etc.
-    this.batchNumber = `BATCH-${month}-${year}-${sequence}`;
-    next();
-  } catch (err) {
-    next(err as CallbackError | undefined);
-  }
+  const sequence = String(count + 1).padStart(4, '0'); // "0001", "0002", etc.
+  this.batchNumber = `BATCH-${month}-${year}-${sequence}`;
 });
 
 productBatchSchema.index({ product: 1, warehouse: 1, isDepleted: 1, batchNumber: 1 });

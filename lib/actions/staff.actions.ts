@@ -9,6 +9,7 @@ import { getCurrentUser } from './auth.actions';
 import { currentUser } from '../helpers/session';
 
 export async function createStaff(staffData: {
+  username?: string;
   fullName: string;
   email: string;
   phoneNumber?: string;
@@ -22,6 +23,12 @@ export async function createStaff(staffData: {
   startDate?: string;
   workLocation?: string;
   bio?: string;
+  availableAllSchedule?: boolean;
+  workSchedule?: Array<{
+    day: string;
+    startTime: string;
+    endTime: string;
+  }>;
   address?: {
     street?: string;
     city?: string;
@@ -51,22 +58,46 @@ export async function createStaff(staffData: {
       throw new Error('Email already exists');
     }
 
+    // Check if username already exists
+    if (staffData.username) {
+      const existingUsername = await Staff.findOne({ username: staffData.username });
+      if (existingUsername) {
+        throw new Error('Username already exists');
+      }
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(staffData.password, 12);
 
-    // Generate username from email
-    const username = staffData.email.split('@')[0].toLowerCase();
+    // Generate username from email if not provided
+    const username = staffData.username || staffData.email.split('@')[0].toLowerCase();
 
-    const staff = await Staff.create({
-      ...staffData,
+    const newStaff = new Staff({
       username,
+      fullName: staffData.fullName,
+      email: staffData.email,
+      phoneNumber: staffData.phoneNumber,
+      emergencyNumber: staffData.emergencyNumber,
+      role: staffData.role,
+      departmentId: staffData.departmentId,
+      jobTitle: staffData.jobTitle,
       password: hashedPassword,
+      gender: staffData.gender,
       dob: staffData.dob ? new Date(staffData.dob) : null,
       startDate: staffData.startDate ? new Date(staffData.startDate) : null,
+      workLocation: staffData.workLocation,
+      bio: staffData.bio,
+      availableAllSchedule: staffData.availableAllSchedule,
+      workSchedule: staffData.workSchedule,
+      address: staffData.address,
+      cardDetails: staffData.cardDetails,
+      accountDetails: staffData.accountDetails,
       createdBy: currentUser.id,
     });
 
-    return JSON.parse(JSON.stringify(staff));
+    await newStaff.save();
+
+    return JSON.parse(JSON.stringify(newStaff));
   } catch (error) {
     throw new Error(`Failed to create staff: ${error}`);
   }
@@ -121,6 +152,7 @@ export async function getStaffById(staffId: string) {
 }
 
 export async function updateStaff(staffId: string, updateData: {
+  username?: string;
   fullName?: string;
   email?: string;
   phoneNumber?: string;
@@ -134,6 +166,12 @@ export async function updateStaff(staffId: string, updateData: {
   workLocation?: string;
   bio?: string;
   isActive?: boolean;
+  availableAllSchedule?: boolean;
+  workSchedule?: Array<{
+    day: string;
+    startTime: string;
+    endTime: string;
+  }>;
   address?: {
     street?: string;
     city?: string;
@@ -165,6 +203,17 @@ export async function updateStaff(staffId: string, updateData: {
       });
       if (existingStaff) {
         throw new Error('Email already exists');
+      }
+    }
+
+    // Check if username exists for other users
+    if (updateData.username) {
+      const existingUsername = await Staff.findOne({ 
+        username: updateData.username, 
+        _id: { $ne: staffId } 
+      });
+      if (existingUsername) {
+        throw new Error('Username already exists');
       }
     }
 
@@ -264,5 +313,221 @@ export async function getStaffStats() {
     };
   } catch (error) {
     throw new Error('Failed to fetch staff statistics');
+  }
+}
+
+export async function toggleStaffStatus(staffId: string, isActive: boolean) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const staff = await Staff.findByIdAndUpdate(
+      staffId,
+      { isActive, modifiedBy: user._id },
+      { new: true }
+    );
+
+    if (!staff) throw new Error('Staff not found');
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error(`Failed to toggle staff status: ${error}`);
+  }
+}
+
+export async function toggleStaffLeave(staffId: string, onLeave: boolean) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const staff = await Staff.findByIdAndUpdate(
+      staffId,
+      { onLeave, modifiedBy: user._id },
+      { new: true }
+    );
+
+    if (!staff) throw new Error('Staff not found');
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error(`Failed to toggle staff leave: ${error}`);
+  }
+}
+
+export async function banStaff(staffId: string, reason?: string) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const staff = await Staff.findByIdAndUpdate(
+      staffId,
+      { 
+        isBanned: true, 
+        isActive: false,
+        modifiedBy: user._id,
+        action_type: 'updated'
+      },
+      { new: true }
+    );
+
+    if (!staff) throw new Error('Staff not found');
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error(`Failed to ban staff: ${error}`);
+  }
+}
+
+export async function unbanStaff(staffId: string) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const staff = await Staff.findByIdAndUpdate(
+      staffId,
+      { 
+        isBanned: false,
+        modifiedBy: user._id,
+        action_type: 'updated'
+      },
+      { new: true }
+    );
+
+    if (!staff) throw new Error('Staff not found');
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error(`Failed to unban staff: ${error}`);
+  }
+}
+
+export async function resetStaffPassword(staffId: string, newPassword: string) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    const staff = await Staff.findByIdAndUpdate(
+      staffId,
+      { 
+        password: hashedPassword,
+        requirePasswordChange: true,
+        modifiedBy: user._id
+      },
+      { new: true }
+    );
+
+    if (!staff) throw new Error('Staff not found');
+
+    return { success: true };
+  } catch (error) {
+    throw new Error(`Failed to reset password: ${error}`);
+  }
+}
+
+export async function getStaffByDepartment(departmentId: string) {
+  try {
+    await connectToDB();
+    
+    const staff = await Staff.find({ 
+      departmentId, 
+      del_flag: false,
+      isActive: true 
+    })
+      .select('_id fullName email role jobTitle')
+      .sort({ fullName: 1 });
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error('Failed to fetch staff by department');
+  }
+}
+
+export async function getStaffByRole(role: string) {
+  try {
+    await connectToDB();
+    
+    const staff = await Staff.find({ 
+      role, 
+      del_flag: false,
+      isActive: true 
+    })
+      .populate('departmentId', 'name')
+      .select('_id fullName email jobTitle departmentId')
+      .sort({ fullName: 1 });
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error('Failed to fetch staff by role');
+  }
+}
+
+export async function searchStaff(query: string) {
+  try {
+    await connectToDB();
+    
+    const staff = await Staff.find({
+      del_flag: false,
+      $or: [
+        { fullName: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } },
+        { phoneNumber: { $regex: query, $options: 'i' } },
+        { username: { $regex: query, $options: 'i' } }
+      ]
+    })
+      .populate('departmentId', 'name')
+      .select('_id fullName email phoneNumber role jobTitle isActive')
+      .limit(20)
+      .sort({ fullName: 1 });
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error('Failed to search staff');
+  }
+}
+
+export async function getStaffWorkSchedule(staffId: string) {
+  try {
+    await connectToDB();
+    
+    const staff = await Staff.findById(staffId)
+      .select('fullName workSchedule availableAllSchedule');
+
+    if (!staff || staff.del_flag) {
+      throw new Error('Staff not found');
+    }
+
+    return JSON.parse(JSON.stringify(staff));
+  } catch (error) {
+    throw new Error('Failed to fetch work schedule');
+  }
+}
+
+export async function bulkUpdateStaffStatus(staffIds: string[], isActive: boolean) {
+  try {
+    const user = await currentUser();
+    if (!user) throw new Error('Unauthorized');
+
+    await connectToDB();
+
+    const result = await Staff.updateMany(
+      { _id: { $in: staffIds }, del_flag: false },
+      { isActive, modifiedBy: user._id }
+    );
+
+    return { success: true, modifiedCount: result.modifiedCount };
+  } catch (error) {
+    throw new Error(`Failed to bulk update staff: ${error}`);
   }
 }

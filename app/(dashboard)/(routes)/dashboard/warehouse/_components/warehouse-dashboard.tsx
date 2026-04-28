@@ -5,7 +5,7 @@ import { useWarehouseStore } from "@/lib/store/warehouse-store"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Package, AlertTriangle, TrendingUp, Warehouse, BarChart3 } from "lucide-react"
+import { Package, AlertTriangle, TrendingUp, Warehouse, BarChart3, Plus } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -51,6 +51,54 @@ export default function WarehouseDashboard({ warehouses }: WarehouseDashboardPro
 
   const currentWarehouse = warehouses.find(w => w._id === selectedWarehouseId)
 
+  // Empty state when no warehouses exist
+  if (warehouses.length === 0) {
+    return (
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Warehouse Management</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
+
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Warehouse Management</h1>
+              <p className="text-muted-foreground">Manage inventory across all warehouse locations</p>
+            </div>
+          </div>
+
+          <Card className="flex flex-col items-center justify-center p-12 text-center">
+            <Warehouse className="h-16 w-16 text-muted-foreground mb-4" />
+            <h2 className="text-2xl font-bold mb-2">No Warehouses Found</h2>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              Get started by creating your first warehouse. You'll be able to manage inventory, track stock levels, and handle transfers across multiple locations.
+            </p>
+            <Link href="/dashboard/warehouse/manage-warehouse">
+              <Button size="lg" className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Create Your First Warehouse
+              </Button>
+            </Link>
+          </Card>
+        </div>
+      </SidebarInset>
+    )
+  }
+
   return (
     <SidebarInset>
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
@@ -78,6 +126,12 @@ export default function WarehouseDashboard({ warehouses }: WarehouseDashboardPro
             <p className="text-muted-foreground">Manage inventory across all warehouse locations</p>
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/dashboard/warehouse/manage-warehouse">
+              <Button className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create Warehouse
+              </Button>
+            </Link>
             <Link href="/dashboard/warehouse/analytics">
               <Button variant="outline" className="flex items-center gap-2">
                 <BarChart3 className="h-4 w-4" />

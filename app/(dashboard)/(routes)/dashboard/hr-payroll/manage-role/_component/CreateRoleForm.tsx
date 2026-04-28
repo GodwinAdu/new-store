@@ -216,6 +216,24 @@ const RoleSchema = z.object({
     deleteHr: z.boolean().optional(),
     manageHr: z.boolean().optional(),
 
+    // Staff Management
+    addStaff: z.boolean().optional(),
+    viewStaff: z.boolean().optional(),
+    editStaff: z.boolean().optional(),
+    deleteStaff: z.boolean().optional(),
+    manageStaff: z.boolean().optional(),
+    toggleStaffStatus: z.boolean().optional(),
+    toggleStaffLeave: z.boolean().optional(),
+    banStaff: z.boolean().optional(),
+    resetStaffPassword: z.boolean().optional(),
+
+    // Department Management
+    addDepartment: z.boolean().optional(),
+    viewDepartment: z.boolean().optional(),
+    editDepartment: z.boolean().optional(),
+    deleteDepartment: z.boolean().optional(),
+    manageDepartment: z.boolean().optional(),
+
     // Request Salary Access
     addRequestSalary: z.boolean().optional(),
     viewRequestSalary: z.boolean().optional(),
@@ -643,6 +661,16 @@ const permissionCategories = {
     icon: <Briefcase className="h-5 w-5" />,
     permissions: ["addHr", "viewHr", "editHr", "deleteHr", "manageHr"],
   },
+  staff: {
+    title: "Staff Management",
+    icon: <Users className="h-5 w-5" />,
+    permissions: ["addStaff", "viewStaff", "editStaff", "deleteStaff", "manageStaff", "toggleStaffStatus", "toggleStaffLeave", "banStaff", "resetStaffPassword"],
+  },
+  department: {
+    title: "Department Management",
+    icon: <Briefcase className="h-5 w-5" />,
+    permissions: ["addDepartment", "viewDepartment", "editDepartment", "deleteDepartment", "manageDepartment"],
+  },
   salary: {
     title: "Salary Requests",
     icon: <DollarSign className="h-5 w-5" />,
@@ -842,6 +870,22 @@ const permissionDescriptions = {
   editHr: "Modify HR records",
   deleteHr: "Remove HR records",
   manageHr: "Full HR management",
+
+  addStaff: "Create new staff members",
+  viewStaff: "View staff information",
+  editStaff: "Modify staff details",
+  deleteStaff: "Remove staff members",
+  manageStaff: "Full staff management",
+  toggleStaffStatus: "Activate/deactivate staff",
+  toggleStaffLeave: "Manage staff leave status",
+  banStaff: "Ban staff members",
+  resetStaffPassword: "Reset staff passwords",
+
+  addDepartment: "Create new departments",
+  viewDepartment: "View department information",
+  editDepartment: "Modify department details",
+  deleteDepartment: "Remove departments",
+  manageDepartment: "Full department management",
 
   addRequestSalary: "Create salary requests",
   viewRequestSalary: "View salary requests",

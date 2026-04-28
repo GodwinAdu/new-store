@@ -270,13 +270,13 @@ export default function AccountsPage() {
                 <span className="text-sm">Record Expense</span>
               </Button>
             </Link>
-            <Link href="/dashboard/accounts/income">
+            <Link href="/dashboard/accounts/incomes">
               <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
                 <TrendingUp className="h-6 w-6" />
                 <span className="text-sm">Record Income</span>
               </Button>
             </Link>
-            <Link href="/dashboard/accounts/fund-transfer">
+            <Link href="/dashboard/accounts/transfer">
               <Button variant="outline" className="w-full h-20 flex flex-col gap-2">
                 <ArrowUpRight className="h-6 w-6" />
                 <span className="text-sm">Transfer Funds</span>

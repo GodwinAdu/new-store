@@ -57,7 +57,7 @@ export const columns: ColumnDef<any>[] = [
                     {
                         label: "Edit",
                         type: "edit",
-                        href: `/dashboard/products/brands/${row.original._id}`,
+                        href: `/dashboard/products/add-products/${row.original._id}`,
                         icon: <Edit className="h-4 w-4" />,
                         permissionKey: "editUser",
                     },
